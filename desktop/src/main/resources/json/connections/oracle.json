@@ -1,0 +1,9 @@
+{
+  "userName": "system",
+  "password": "",
+  "url": "jdbc:oracle:thin:@localhost:1523:orcl",
+  "jar": "C:\\Users\\.temp\\ojdbc6.jar",
+  "driver": "oracle.jdbc.driver.OracleDriver",
+  "id": 1001,
+  "name": "Oracle"
+}
