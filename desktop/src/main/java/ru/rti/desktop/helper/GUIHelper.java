@@ -1,25 +1,7 @@
 package ru.rti.desktop.helper;
 
-import java.awt.BorderLayout;
-import java.awt.Color;
-import java.awt.Component;
-import java.awt.Font;
-import javax.swing.BorderFactory;
-import javax.swing.DefaultCellEditor;
-import javax.swing.JButton;
-import javax.swing.JCheckBox;
-import javax.swing.JComboBox;
-import javax.swing.JLabel;
-import javax.swing.JPanel;
-import javax.swing.JScrollPane;
-import javax.swing.JSplitPane;
-import javax.swing.JTable;
-import javax.swing.JTextArea;
-import javax.swing.JTextField;
-import javax.swing.JViewport;
-import javax.swing.ListSelectionModel;
-import javax.swing.ScrollPaneConstants;
-import javax.swing.SwingConstants;
+import java.awt.*;
+import javax.swing.*;
 import javax.swing.border.Border;
 import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.DefaultTableModel;
@@ -143,13 +125,13 @@ public class GUIHelper {
     }
 
     public static String getNameByColumnName(JXTable jxTable, DefaultTableModel defaultTableModel,
-                                             ListSelectionModel listSelectionModel, String profileColumnName) {
+                                             ListSelectionModel listSelectionModel, String columnName) {
         String name = "";
         int minIndex = listSelectionModel.getMinSelectionIndex();
         int maxIndex = listSelectionModel.getMaxSelectionIndex();
         for (int i = minIndex; i <= maxIndex; i++) {
             if (listSelectionModel.isSelectedIndex(i)) {
-                name = (String) jxTable.getModel().getValueAt(i, defaultTableModel.findColumn(profileColumnName));
+                name = (String) jxTable.getModel().getValueAt(i, defaultTableModel.findColumn(columnName));
             }
         }
 
@@ -237,7 +219,6 @@ public class GUIHelper {
             @Override
             public Class<?> getColumnClass(int columnIndex) {
                 if (columnIndex == BOOLEAN_COL) {
-
                     return Boolean.class;
                 } else {
                     return String.class;
@@ -332,5 +313,19 @@ public class GUIHelper {
         JScrollPane jScrollPane = getJScrollPane(jxTable);
 
         return new JXTableCase(jxTable, defaultTableModel, jScrollPane);
+    }
+
+    public static void setScrolling(JScrollPane jsp) {
+       // jsp.setWheelScrollingEnabled(true);
+        JScrollBar verticalScrollBar = jsp.getVerticalScrollBar();
+        verticalScrollBar.setUnitIncrement(20);
+        JScrollBar horizontalScrollBar = jsp.getHorizontalScrollBar();
+        horizontalScrollBar.setUnitIncrement(20);
+    }
+
+    public static JSeparator verticalSeparator() {
+        JSeparator vSeparator = new JSeparator(SwingConstants.VERTICAL);
+        vSeparator.setPreferredSize(new Dimension(5, 25));
+        return vSeparator;
     }
 }

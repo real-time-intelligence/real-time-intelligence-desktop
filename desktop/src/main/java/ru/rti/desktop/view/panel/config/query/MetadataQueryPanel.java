@@ -105,7 +105,7 @@ public class MetadataQueryPanel extends JPanel{
         gblBtn.row()
                 .cell(loadMetadata)
                 .cell(this.queryConnectionMetadataComboBox)
-                .cell(verticalSeparator())
+                .cell(GUIHelper.verticalSeparator())
                 .cell(editMetadata)
                 .cell(saveMetadata)
                 .cell(cancelMetadata)
@@ -149,11 +149,5 @@ public class MetadataQueryPanel extends JPanel{
         gbl.row()
                 .cellXYRemainder(columnPanel).fillXY();
         gbl.done();
-    }
-
-    public JSeparator verticalSeparator() {
-        JSeparator vSeparator = new JSeparator(SwingConstants.VERTICAL);
-        vSeparator.setPreferredSize(new Dimension(5, 25));
-        return vSeparator;
     }
 }

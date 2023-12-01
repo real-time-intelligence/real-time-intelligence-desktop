@@ -1,11 +1,16 @@
 package ru.rti.desktop.model.info;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import lombok.Data;
+import lombok.EqualsAndHashCode;
 import org.fbase.model.profile.SProfile;
 import org.fbase.model.profile.TProfile;
 import org.fbase.model.profile.cstype.CSType;
 
+@EqualsAndHashCode(callSuper = true)
+@Data
 public class TableInfo extends TProfile {
 
   public SProfile getSProfile() {
@@ -27,4 +32,6 @@ public class TableInfo extends TProfile {
 
     return sProfile;
   }
+
+  List<String> valuableColumnList;
 }

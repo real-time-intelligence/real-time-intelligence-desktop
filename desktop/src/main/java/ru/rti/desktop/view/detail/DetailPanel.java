@@ -22,6 +22,7 @@ import ru.rti.desktop.model.info.QueryInfo;
 import ru.rti.desktop.model.info.TableInfo;
 import ru.rti.desktop.model.view.ProcessType;
 import ru.rti.desktop.router.event.EventListener;
+import ru.rti.desktop.view.detail.gantt.MainGanttPanel;
 
 @Log4j2
 public class DetailPanel extends JPanel implements IDetailPanel {
@@ -47,8 +48,12 @@ public class DetailPanel extends JPanel implements IDetailPanel {
   private final Map<String, Color> seriesColorMap;
 
   public DetailPanel(WorkspaceQueryComponent workspaceQueryComponent,
-      QueryInfo queryInfo, TableInfo tableInfo, CProfile cProfile,
-      Map<String, Color> seriesColorMap, ProcessType processType, ChartType chartType) {
+                     QueryInfo queryInfo,
+                     TableInfo tableInfo,
+                     CProfile cProfile,
+                     Map<String, Color> seriesColorMap,
+                     ProcessType processType,
+                     ChartType chartType) {
     this.workspaceQueryComponent = workspaceQueryComponent;
     this.workspaceQueryComponent.initDetail(new WorkspaceDetailModule(this)).inject(this);
 
@@ -82,9 +87,8 @@ public class DetailPanel extends JPanel implements IDetailPanel {
         JTabbedPane mainJTabbedPane = new JTabbedPane();
 
         if (ChartType.STACKED.equals(chartType)) {
-          GanttDataPanel ganttDataPanel = new GanttDataPanel(workspaceQueryComponent, queryInfo, tableInfo,
-              cProfile, begin, end, seriesColorMap);
-          mainJTabbedPane.add("Gantt", ganttDataPanel);
+          MainGanttPanel mainGanttPanel = new MainGanttPanel(workspaceQueryComponent, tableInfo, cProfile, begin, end, seriesColorMap);
+          mainJTabbedPane.add("Gantt", mainGanttPanel);
         }
 
         RawDataPanel rawDataPanel;
@@ -107,5 +111,4 @@ public class DetailPanel extends JPanel implements IDetailPanel {
 
     });
   }
-
 }

@@ -23,6 +23,7 @@ import ru.rti.desktop.model.view.RangeChartHistory;
 import ru.rti.desktop.router.event.EventListener;
 import ru.rti.desktop.view.pane.ChartJTabbedPane;
 import ru.rti.desktop.view.panel.TimeRangeAbsolutePanel;
+import ru.rti.desktop.view.structure.workspace.query.DetailsControlPanel;
 
 @Log4j2
 public class TimeRangeAbsoluteHandler extends ChartHandler implements ActionListener {
@@ -49,9 +50,10 @@ public class TimeRangeAbsoluteHandler extends ChartHandler implements ActionList
                                     QueryInfo queryInfo,
                                     TableInfo tableInfo,
                                     ChartInfo chartInfo,
+                                    DetailsControlPanel detailsControlPanel,
                                     WorkspaceQueryComponent workspaceQueryComponent) {
         super(chartJTabbedPane, jxTableCaseMetrics, jxTableCaseColumns, tableInfo, queryInfo, chartInfo,
-            profileTaskQueryKey, chartGanttPanelRealTime, chartGanttPanelHistory, workspaceQueryComponent);
+            profileTaskQueryKey, chartGanttPanelRealTime, chartGanttPanelHistory, detailsControlPanel, workspaceQueryComponent);
 
         this.timeRangeAbsolutePanel = timeRangeAbsolutePanel;
 

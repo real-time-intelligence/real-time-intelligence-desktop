@@ -28,6 +28,7 @@ import ru.rti.desktop.model.local.LoadDataMode;
 import ru.rti.desktop.model.table.JXTableCase;
 import ru.rti.desktop.model.view.EditTabbedPane;
 import ru.rti.desktop.prompt.Internationalization;
+import ru.rti.desktop.view.handler.CommonViewHandler;
 import ru.rti.desktop.view.handler.MouseListenerImpl;
 import ru.rti.desktop.view.pane.JTabbedPaneConfig;
 import ru.rti.desktop.view.panel.config.ButtonPanel;
@@ -38,7 +39,8 @@ import ru.rti.desktop.view.panel.config.query.QueryPanel;
 
 @Log4j2
 @Singleton
-public class QuerySelectionHandler extends MouseListenerImpl implements ListSelectionListener, ItemListener {
+public class QuerySelectionHandler extends MouseListenerImpl implements ListSelectionListener, ItemListener,
+    CommonViewHandler {
 
     private final ProfileManager profileManager;
     private final JXTableCase queryCase;
@@ -87,7 +89,6 @@ public class QuerySelectionHandler extends MouseListenerImpl implements ListSele
         this.checkboxConfig = checkboxConfig;
         this.checkboxConfig.addItemListener(this);
         this.isSelected = false;
-
 
         this.bundleDefault = Internationalization.getInternationalizationBundle();
     }
@@ -156,13 +157,8 @@ public class QuerySelectionHandler extends MouseListenerImpl implements ListSele
                 configMetadataCase.getDefaultTableModel().fireTableDataChanged();
 
                 if (cProfileList != null) {
-                    cProfileList.stream()
-                            .filter(f -> !f.getCsType().isTimeStamp())
-                            .forEach(cProfile -> configMetadataCase.getDefaultTableModel()
-                                    .addRow(new Object[]{cProfile.getColId(), cProfile.getColIdSql(), cProfile.getColName(),
-                                            cProfile.getColDbTypeName(), cProfile.getCsType().getSType(),
-                                            cProfile.getCsType().getCType()
-                                    }));
+                    fillConfigMetadata(tableInfo, configMetadataCase);
+
                     cProfileList.stream()
                             .filter(f -> !f.getCsType().isTimeStamp())
                             .forEach(cProfile -> xAxisList.add(cProfile.getColName()));

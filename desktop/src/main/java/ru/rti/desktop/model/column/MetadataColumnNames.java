@@ -7,9 +7,8 @@ public enum MetadataColumnNames {
   COLUMN_DB_TYPE_NAME("DB type"),
   STORAGE("Storage type"),
   COLUMN_TYPE("Local type"),
-  TIMESTAMP("Timestamp");
-
-
+  TIMESTAMP("Timestamp"),
+  VALUABLE("Valuable");
 
   private final String colName;
 

@@ -7,6 +7,7 @@ import ru.rti.desktop.model.ProfileTaskQueryKey;
 import ru.rti.desktop.model.chart.AsIsValueTyped;
 import ru.rti.desktop.model.chart.CategoryTableXYDatasetRealTime;
 import ru.rti.desktop.model.chart.ChartRange;
+import ru.rti.desktop.model.config.Metric;
 import ru.rti.desktop.model.info.QueryInfo;
 import ru.rti.desktop.model.info.gui.ChartInfo;
 
@@ -21,16 +22,16 @@ public class ServerClientHistoryOneSCRP extends StackChartReportPanel {
                                       ProfileTaskQueryKey profileTaskQueryKey,
                                       QueryInfo queryInfo,
                                       ChartInfo chartInfo,
-                                      CProfile cProfile,
+                                      Metric metric,
                                       FStore fStore
     ) {
         super(categoryTableXYDatasetRealTime, profileTaskQueryKey, queryInfo, chartInfo,
-                cProfile, fStore);
+                metric, fStore);
     }
 
     @Override
     public void initialize() {
-        this.series.add(cProfile.getColName());
+        this.series.add(metric.getYAxis().getColName());
         this.batchSize = Math.toIntExact(Math.round((double) (getRangeHistory(chartInfo) / 1000) / MAX_POINT_PER_GRAPH));
 
         initializeHistory();
@@ -47,7 +48,7 @@ public class ServerClientHistoryOneSCRP extends StackChartReportPanel {
             long dtEnd = dtBegin + Math.round(range) - 1;
 
             List<List<Object>> rawDataByColumn =
-                    fStore.getRawDataByColumn(queryInfo.getName(), cProfile, dtBegin, dtEnd);
+                    fStore.getRawDataByColumn(queryInfo.getName(), metric.getYAxis(), dtBegin, dtEnd);
 
             try {
                 List<AsIsValueTyped> objectsAll = new ArrayList<>();

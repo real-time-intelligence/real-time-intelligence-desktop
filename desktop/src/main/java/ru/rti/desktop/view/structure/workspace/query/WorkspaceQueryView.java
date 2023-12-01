@@ -174,21 +174,21 @@ public class WorkspaceQueryView extends JPanel {
         this.timeRangeQuickHandler = new TimeRangeQuickHandler(jxTableCaseMetrics, jxTableCaseColumns,
                         rangeChartRealTimePanel, rangeChartHistoryPanel,
                         chartGanttPanelRealTime, chartGanttPanelHistory, chartJTabbedPane, customHistoryPanel,
-                        profileTaskQueryKey, queryInfo, tableInfo, chartInfo, workspaceQueryComponent);
+                        profileTaskQueryKey, queryInfo, tableInfo, chartInfo, detailsControlPanel, workspaceQueryComponent);
 
         this.timeRangeRelativeHandler = new TimeRangeRelativeHandler(jxTableCaseMetrics, jxTableCaseColumns,
                 timeRangeRelativePanel, chartJTabbedPane, chartGanttPanelRealTime, chartGanttPanelHistory,
-                profileTaskQueryKey, queryInfo, tableInfo, chartInfo, workspaceQueryComponent);
+                profileTaskQueryKey, queryInfo, tableInfo, chartInfo, detailsControlPanel, workspaceQueryComponent);
 
         this.timeRangeAbsoluteHandler = new TimeRangeAbsoluteHandler(jxTableCaseMetrics, jxTableCaseColumns,
             timeRangeAbsolutePanel, chartJTabbedPane, profileTaskQueryKey,
-            chartGanttPanelRealTime, chartGanttPanelHistory, queryInfo, tableInfo,
-            chartInfo, workspaceQueryComponent);
+            chartGanttPanelRealTime, chartGanttPanelHistory, queryInfo, tableInfo, chartInfo,
+            detailsControlPanel, workspaceQueryComponent);
 
         this.eventListener.clearListener(AppCacheAddListener.class);
         this.timeRangeRecentHandler = new TimeRangeRecentHandler(jxTableCaseMetrics, jxTableCaseColumns, jxTableCaseRecent,
             profileTaskQueryKey, chartJTabbedPane, chartGanttPanelRealTime, chartGanttPanelHistory,
-            chartInfo, queryInfo, tableInfo, workspaceQueryComponent);
+            chartInfo, queryInfo, tableInfo, detailsControlPanel, workspaceQueryComponent);
         this.eventListener.addAppCacheAddListener(this.timeRangeRecentHandler);
 
         this.querySearchHandler = new QuerySearchHandler(chartPanelSearch, querySearchButtonPanel,

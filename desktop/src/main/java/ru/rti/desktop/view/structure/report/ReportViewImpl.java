@@ -36,14 +36,12 @@ public class ReportViewImpl extends JDialog implements ReportView {
     private final JXTableCase profileReportCase;
     private final JXTableCase taskReportCase;
     private final JXTableCase queryReportCase;
-    private final JTabbedPane metricAndColReport;
     private final ReportTabsPane reportTabsPane;
-    private final JXTableCase reportMetricsCase;
-    private final JXTableCase reportColumnCase;
     private final DesignPanelHandler designPanelHandler;
     private final ReportPanelHandler reportPanelHandler;
     private final ProfileManager profileManager;
     private final Map<ProfileTaskQueryKey, QueryReportData> mapReportData;
+    private final JSplitPane jSplitPaneReport;
 
 
     @Inject
@@ -52,10 +50,7 @@ public class ReportViewImpl extends JDialog implements ReportView {
                           @Named("profileReportCase") JXTableCase profileReportCase,
                           @Named("taskReportCase") JXTableCase taskReportCase,
                           @Named("queryReportCase") JXTableCase queryReportCase,
-                          @Named("reportMetricsCase") JXTableCase reportMetricsCase,
-                          @Named("reportColumnCase") JXTableCase reportColumnCase,
                           @Named("reportTaskPanel") ReportTabsPane reportTabsPane,
-                          @Named("metricAndColReport") JTabbedPane metricAndColReport,
                           @Named("profileManager") ProfileManager profileManager,
                           @Named("mapReportData") Map<ProfileTaskQueryKey, QueryReportData> mapReportData,
                           @Named("designPanelHandler") DesignPanelHandler designPanelHandler,
@@ -64,16 +59,12 @@ public class ReportViewImpl extends JDialog implements ReportView {
         this.jFrame = jFrame;
         this.reportPresenter = reportPresenter;
 
+        this.jSplitPaneReport =  GUIHelper.getJSplitPane(JSplitPane.VERTICAL_SPLIT, 10, 150);
+
         this.profileReportCase = profileReportCase;
         this.taskReportCase = taskReportCase;
         this.queryReportCase = queryReportCase;
-        this.metricAndColReport = metricAndColReport;
-        this.reportMetricsCase = reportMetricsCase;
-        this.reportColumnCase = reportColumnCase;
-        this.metricAndColReport.add("Metrics", reportMetricsCase.getJScrollPane());
-        this.metricAndColReport.setMnemonicAt(0, KeyEvent.VK_M);
-        this.metricAndColReport.add("Columns", reportColumnCase.getJScrollPane());
-        this.metricAndColReport.setMnemonicAt(1, KeyEvent.VK_N);
+
         this.profileManager = profileManager;
         this.mapReportData = mapReportData;
 
@@ -84,30 +75,15 @@ public class ReportViewImpl extends JDialog implements ReportView {
         this.designPanelHandler = designPanelHandler;
         this.reportPanelHandler = reportPanelHandler;
 
-        PainlessGridBag gbl = new PainlessGridBag(this, GUIHelper.getPainlessGridbagConfiguration(), false);
-        gbl.row()
-                .cell(fillEntitiesPane()).fillX();
-        gbl.row()
-                .cellXYRemainder(fillReportPane()).fillXY();
-        gbl.done();
+        jSplitPaneReport.setTopComponent(fillEntitiesPane());
+        jSplitPaneReport.setBottomComponent(reportTabsPane);
+        jSplitPaneReport.setResizeWeight(1.0);
 
+        this.add(jSplitPaneReport);
         this.setTitle("Report");
 
         this.packReport(false);
     }
-
-    private JPanel fillReportPane() {
-        JPanel jPanel = new JPanel();
-        jPanel.setBorder(new EtchedBorder());
-        PainlessGridBag gbl = new PainlessGridBag(jPanel, GUIHelper.getPainlessGridbagConfiguration(), false);
-
-        gbl.row()
-                .cell(reportTabsPane).fillXY();
-
-        gbl.done();
-        return jPanel;
-    }
-
 
     private JPanel fillEntitiesPane() {
         JPanel panel = new JPanel();
@@ -118,13 +94,11 @@ public class ReportViewImpl extends JDialog implements ReportView {
         gbl.row()
                 .cell(new JXTitledSeparator("Profile")).fillX()
                 .cell(new JXTitledSeparator("Task")).fillX()
-                .cell(new JXTitledSeparator("Query")).fillX()
-                .cell(new JXTitledSeparator("Metrics and Columns")).fillX();
+                .cell(new JXTitledSeparator("Query")).fillX();
         gbl.row()
                 .cell(profileReportCase.getJScrollPane()).fillXY()
                 .cell(taskReportCase.getJScrollPane()).fillXY()
-                .cell(queryReportCase.getJScrollPane()).fillXY()
-                .cell(metricAndColReport).fillXY();
+                .cell(queryReportCase.getJScrollPane()).fillXY();
 
         gbl.done();
 
@@ -170,8 +144,6 @@ public class ReportViewImpl extends JDialog implements ReportView {
 
 
         this.reportPresenter.get().fillModel(Query.class);
-        queryReportCase.getJxTable().getColumnExt(0).setVisible(false);
-        queryReportCase.getJxTable().getColumnModel().getColumn(0).setCellRenderer(new GUIHelper.ActiveColumnCellRenderer());
 
         addWindowListener(reportPresenter.get());
 

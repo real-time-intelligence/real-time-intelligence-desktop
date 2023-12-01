@@ -8,12 +8,15 @@ import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Objects;
-import java.util.concurrent.*;
+import java.util.concurrent.CompletableFuture;
 import javax.inject.Inject;
 import javax.inject.Named;
 import javax.inject.Singleton;
-import javax.swing.*;
-
+import javax.swing.JCheckBox;
+import javax.swing.JDialog;
+import javax.swing.JOptionPane;
+import javax.swing.JTabbedPane;
+import javax.swing.ListSelectionModel;
 import lombok.extern.log4j.Log4j2;
 import org.fbase.core.FStore;
 import org.fbase.exception.TableNameEmptyException;
@@ -35,6 +38,7 @@ import ru.rti.desktop.model.info.ProfileInfo;
 import ru.rti.desktop.model.info.QueryInfo;
 import ru.rti.desktop.model.info.TableInfo;
 import ru.rti.desktop.model.table.JXTableCase;
+import ru.rti.desktop.view.handler.CommonViewHandler;
 import ru.rti.desktop.view.pane.JTabbedPaneConfig;
 import ru.rti.desktop.view.panel.config.query.MetadataQueryPanel;
 import ru.rti.desktop.view.panel.config.query.MetricQueryPanel;
@@ -42,7 +46,7 @@ import ru.rti.desktop.view.panel.config.query.MetricQueryPanel;
 
 @Log4j2
 @Singleton
-public class QueryMetadataHandler implements ActionListener {
+public class QueryMetadataHandler implements ActionListener, CommonViewHandler {
 
     private final JXTableCase profileCase;
     private final JXTableCase taskCase;
@@ -54,7 +58,6 @@ public class QueryMetadataHandler implements ActionListener {
 
     private final FStore fStore;
 
-    private final ExecutorService executor = Executors.newSingleThreadExecutor();
     private final JCheckBox checkboxConfig;
     private final MetadataQueryPanel metadataQueryPanel;
     private final MetricQueryPanel metricQueryPanel;
@@ -83,8 +86,9 @@ public class QueryMetadataHandler implements ActionListener {
         this.connectionPoolManager = connectionPoolManager;
         this.configMetadataCase = configMetadataCase;
 
-        this.metadataQueryPanel = metadataQueryPanel;
         metadataQueryPanel.getTableName().setEditable(false);
+
+        this.metadataQueryPanel = metadataQueryPanel;
         this.metricQueryPanel = metricQueryPanel;
         this.mainQuery = mainQuery;
         this.jTabbedPaneConfig = jTabbedPaneConfig;
@@ -202,6 +206,10 @@ public class QueryMetadataHandler implements ActionListener {
                     throw new NotFoundException("Not found table: " + query.getName());
                 }
 
+                if (Objects.isNull(tableInfo.getValuableColumnList())) {
+                    tableInfo.setValuableColumnList(new ArrayList<>());
+                }
+
                 // Fill SProfile configuration from UI
                 tableInfo.setTableType(TType.valueOf(
                         Objects.requireNonNull(metadataQueryPanel.getTableType().getSelectedItem()).toString()));
@@ -214,8 +222,7 @@ public class QueryMetadataHandler implements ActionListener {
                     connectionPoolManager.createDataSource(connectionInfo);
                     java.sql.Connection connection = connectionPoolManager.getConnection(connectionInfo);
 
-                    TProfile tProfile = fStore.loadJdbcTableMetadata(connection, queryInfo.getText(),
-                            tableInfo.getSProfile());
+                    TProfile tProfile = fStore.loadJdbcTableMetadata(connection, queryInfo.getText(), tableInfo.getSProfile());
 
                     tableInfo.setCProfiles(tProfile.getCProfiles());
                 } catch (SQLException | TableNameEmptyException ex) {
@@ -235,9 +242,8 @@ public class QueryMetadataHandler implements ActionListener {
                 if (queryCase.getJxTable().getSelectedRowCount() > 0) {
                     int queryId = (Integer) queryCase.getDefaultTableModel()
                             .getValueAt(queryCase.getJxTable().getSelectedRow(), 0);
-                    ;
-                    setPanelView(true);
 
+                    setPanelView(true);
 
                     QueryInfo queryInfo = profileManager.getQueryInfoById(queryId);
                     if (Objects.isNull(queryInfo)) {
@@ -259,8 +265,7 @@ public class QueryMetadataHandler implements ActionListener {
                                                         connectionInfo.getUrl(),
                                                         connectionInfo.getJar(),
                                                         connectionInfo.getDriver())));
-                                    },
-                                    () -> log.info("No found query by query id: " + queryId));
+                                    }, () -> log.info("No found query by query id: " + queryId));
 
                     metadataQueryPanel.getQueryConnectionMetadataComboBox().setTableData(connectionData);
 
@@ -421,10 +426,18 @@ public class QueryMetadataHandler implements ActionListener {
         String timeStampSelected = metadataQueryPanel.getTimestampComboBox().getSelectedItem().toString();
 
         for (int i = 0; i < configMetadataCase.getDefaultTableModel().getRowCount(); i++) {
-            String selectedDataKey = (String) configMetadataCase.getDefaultTableModel()
-                    .getValueAt(i, 2);
-            SType selectedDataSType = (SType) configMetadataCase.getDefaultTableModel()
-                    .getValueAt(i, 4);
+            String selectedDataKey = (String) configMetadataCase.getDefaultTableModel().getValueAt(i, 2);
+            SType selectedDataSType = (SType) configMetadataCase.getDefaultTableModel().getValueAt(i, 4);
+
+            Boolean selectedValuable = (Boolean) configMetadataCase.getDefaultTableModel().getValueAt(i, 6);
+
+            if (Boolean.TRUE.equals(selectedValuable)) {
+                if (!tableInfo.getValuableColumnList().contains(selectedDataKey)) {
+                    tableInfo.getValuableColumnList().add(selectedDataKey);
+                }
+            } else {
+               tableInfo.getValuableColumnList().remove(selectedDataKey);
+            }
 
             String timeStampPrevious = tableInfo.getCProfiles().stream()
                     .filter(f -> f.getCsType().isTimeStamp())
@@ -482,17 +495,9 @@ public class QueryMetadataHandler implements ActionListener {
         configMetadataCase.getDefaultTableModel().fireTableDataChanged();
 
         if (tableInfo != null && tableInfo.getCProfiles() != null) {
-            tableInfo.getCProfiles().stream()
-                    .filter(f -> !f.getCsType().isTimeStamp())
-                    .forEach(cProfile -> configMetadataCase.getDefaultTableModel()
-                            .addRow(new Object[]{cProfile.getColId(), cProfile.getColIdSql(), cProfile.getColName(),
-                                    cProfile.getColDbTypeName(), cProfile.getCsType().getSType(),
-                                    cProfile.getCsType().getCType()
-                            }));
+            fillConfigMetadata(tableInfo, configMetadataCase);
         }
-
     }
-
 
     private void setPanelView(Boolean isSelected) {
         metadataQueryPanel.getConfigMetadataCase().getJxTable().setEditable(!isSelected);
@@ -514,6 +519,5 @@ public class QueryMetadataHandler implements ActionListener {
         queryCase.getJxTable().setEnabled(isSelected);
         checkboxConfig.setEnabled(isSelected);
     }
-
 }
 

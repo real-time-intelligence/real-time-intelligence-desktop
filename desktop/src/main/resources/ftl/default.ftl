@@ -1,59 +1,103 @@
 <!DOCTYPE html>
-<html>
-<head>
-    <style>
-        h1 {
-            color: #ccc;
-        }
+<html lang="ru">
+    <head>
 
-        table tr td {
-            text-align: center;
-            border: 1px solid gray;
-            padding: 4px;
-        }
+        <meta charset="UTF-8"></meta>
+        <title>Report</title>
 
-        table tr th {
-            background-color: #84C7FD;
-            color: #fff;
-            width: 100px;
-        }
+        <style>
+            h1 {
+                color: #ccc;
+            }
 
-        .itext {
-            color: #84C7FD;
-            font-weight: bold;
-        }
+            .table-ptq tr td {
+                text-align: center;
+                border: 1px solid gray;
+                padding: 4px;
+            }
 
-        .description {
-            color: gray;
-        }
-    </style>
-    <title>Report</title>
-    <meta charset="utf-8"/>
-    <link href="style.css" rel="stylesheet" type="text/css"/>
-</head>
-<body>
-<h1>Report for the period </h1>
-<h2>${dateFrom} - ${dateTo}</h2>
+            .table-ptq tr th {
+                background-color: #84C7FD;
+                color: #fff;
+                width: 100px;
+            }
 
-<#list templatesInfos as templateInfo>
-<table>
-    <tr>
-        <th class="label">Profile</th>
-        <td>${profileName}</td>
-    </tr>
-    <tr>
-        <th>Task</th>
-        <td>${taskName}</td>
-    </tr>
-    <tr>
-        <th>Query</th>
-        <td>${queryName}</td>
-    </tr>
-</table>
-    <p><span class="itext"> ${templateInfo.nameCard}  </span></p>
-    <p><span class="description"> ${templateInfo.description}</span></p>
-    <img class="img" src="${templateInfo.pathChart}" alt="chart"></img>
-</#list>
 
-</body>
+            .itext-left {
+                color: #84C7FD;
+                font-weight: bold;
+                text-align: left;
+                margin-right: -10px;
+            }
+
+            .description {
+                color: gray;
+                font-family: Arial Unicode MS, FreeSans;
+                font-size:16px;
+                font-weight: normal;
+            }
+
+            .img {
+                border: 3px solid #ffffff;
+                padding: 20px;
+            }
+
+            .table-mc tr td {
+                color: #84C7FD;
+                font-weight: bold;
+                text-align: center;
+                border: 3px solid #ffffff;
+                padding-left: 0;
+                padding-top: 20px;
+                padding-bottom: 5px;
+            }
+
+            .table-desc tr td {
+                color: gray;
+                text-align: left;
+                border: 3px solid #ffffff;
+                padding-left: 0;
+                padding-top: 15px;
+                padding-bottom: 15px;
+            }
+
+        </style>
+
+    </head>
+    <body>
+        <h1>Report for the period </h1>
+        <h2> ${dateFrom} - ${dateTo} </h2>
+
+        <table class="table-ptq">
+            <tr>
+                <th>Profile</th>
+                <td>${profileName}</td>
+            </tr>
+            <tr>
+                <th>Task</th>
+                <td>${taskName}</td>
+            </tr>
+            <tr>
+                <th>Query</th>
+                <td>${queryName}</td>
+            </tr>
+        </table>
+
+
+        <table class="table-mc">
+            <tr>
+                <td>${nameCard}</td>
+                <td class="itext-left">${nameFunction} </td>
+            </tr>
+        </table>
+        <table class="table-desc">
+            <tr>
+                <td>
+                    <span class="description"> ${description}</span>
+                </td>
+            </tr>
+        </table>
+
+        <img class="img" src="${pathChart}" alt="chart"></img>
+    </body>
 </html>

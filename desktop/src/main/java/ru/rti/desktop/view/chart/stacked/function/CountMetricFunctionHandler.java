@@ -94,7 +94,6 @@ public class CountMetricFunctionHandler extends MetricFunctionDataHandler {
     }
 
     private void checkSeriesCount(Set<String> series) {
-        log.info(series);
         if (series.size() > 50) {
            throw new SeriesExceedException("Column data series exceeds 50. Not supported to show stacked data..");
         }

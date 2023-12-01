@@ -42,6 +42,11 @@ public class FilesHelper {
     public static String QUERIES_DIR_NAME = "queries";
     public static String TABLES_DIR_NAME = "tables";
 
+    public static String CONFIG_JSON_DIR_NAME = "json";
+    public static String CONFIG_FTL_DIR_NAME = "ftl";
+    public static String CONFIG_TTF_DIR_NAME = "ttf";
+    public static String FILE_SEPARATOR_JAVA = "/";
+
     public FilesHelper(String rootDir) {
         try {
             setRootDir(rootDir);
@@ -96,6 +101,10 @@ public class FilesHelper {
         return Paths.get(getReportDir() + fileSeparator + "templates");
     }
 
+    public String getFilePathFont(String fileName) {
+        return getReportDir() + fileSeparator + "templates" + fileSeparator + fileName;
+    }
+
     public boolean isJar() throws URISyntaxException {
         return getJarPath().endsWith(".jar");
     }
@@ -108,10 +117,26 @@ public class FilesHelper {
                 .getPath();
     }
 
-    public List<String> getFilePathDirectoryResourcesJar(String typeName) throws URISyntaxException, IOException {
-        String config = "json";
-        String fileSeparatorJava = "/";
+    public List<Path> getFilePathDirectoryResourcesJar(String configTypeName) throws URISyntaxException, IOException {
+        List<Path> result = new ArrayList<>();
 
+        String jarPath = getJarPath();
+
+        URI uri = URI.create("jar:file:" + jarPath);
+
+        try (FileSystem fs = FileSystems.newFileSystem(uri, Collections.emptyMap())) {
+            try (Stream<Path> paths = Files.walk(fs.getPath(configTypeName))) {
+                paths.filter(Files::isRegularFile).forEach(result::add);
+            } catch (IOException e) {
+                log.catching(e);
+                return Collections.emptyList();
+            }
+        }
+
+        return result;
+    }
+
+    public List<String> getFileContentDirectoryResourcesJar(String configTypeName) throws URISyntaxException, IOException {
         List<String> result = new ArrayList<>();
 
         String jarPath = getJarPath();
@@ -119,7 +144,7 @@ public class FilesHelper {
         URI uri = URI.create("jar:file:" + jarPath);
 
         try (FileSystem fs = FileSystems.newFileSystem(uri, Collections.emptyMap())) {
-            try (Stream<Path> paths = Files.walk(fs.getPath(config + fileSeparatorJava + typeName))) {
+            try (Stream<Path> paths = Files.walk(fs.getPath(configTypeName))) {
                 paths.filter(Files::isRegularFile).forEach(path -> {
                     result.add(getFileFromResource(path.toString()));
                 });
@@ -132,15 +157,12 @@ public class FilesHelper {
         return result;
     }
 
-    public List<Path> getFilePathDirectoryResourcesFromFS(String typeName) throws URISyntaxException, IOException {
-        String config = "json";
-        String fileSeparatorJava = "/";
-
+    public List<Path> getFilePathDirectoryResourcesFromFS(String configTypeName) throws URISyntaxException, IOException {
         List<Path> result = new ArrayList<>();
 
         String jarPath = getJarPath();
 
-        URI uri = URI.create("file://" + jarPath + fileSeparatorJava + config + fileSeparatorJava + typeName);
+        URI uri = URI.create("file://" + jarPath + FILE_SEPARATOR_JAVA + configTypeName);
         try (Stream<Path> paths = Files.walk(Paths.get(uri))) {
             paths.filter(Files::isRegularFile).forEach(result::add);
         } catch (IOException e) {

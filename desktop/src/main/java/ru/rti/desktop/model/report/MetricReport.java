@@ -6,6 +6,6 @@ import ru.rti.desktop.model.config.Metric;
 @EqualsAndHashCode(callSuper = true)
 @Data
 public class MetricReport extends Metric {
-    private String comment;
 
+    private String comment;
 }

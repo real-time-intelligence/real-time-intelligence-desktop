@@ -30,8 +30,7 @@ public class QueryMetricHandler implements ListSelectionListener {
         this.profileManager = profileManager;
         this.metricQueryPanel = metricQueryPanel;
         this.mainQueryPanel = mainQueryPanel;
-        this.metricQueryPanel.getConfigMetricCase().getJxTable().getSelectionModel()
-                .addListSelectionListener(this);
+        this.metricQueryPanel.getConfigMetricCase().getJxTable().getSelectionModel().addListSelectionListener(this);
     }
 
     @Override
@@ -62,7 +61,6 @@ public class QueryMetricHandler implements ListSelectionListener {
                 metricQueryPanel.getChartType().setSelectedItem(metric.getChartType().toString());
 
                 GUIHelper.disableButton(metricQueryPanel.getMetricQueryButtonPanel(), true);
-
             }
         }
     }

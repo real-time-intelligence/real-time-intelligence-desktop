@@ -100,5 +100,6 @@ public abstract class HandlerConfig {
     @Named("reportPanelHandler")
     public abstract ReportPanelHandler bindReportPanelHandler(
             ReportPanelHandler reportPanelHandler);
+
 }
 

@@ -10,6 +10,7 @@
 - [Data storage](#data-storage)
 - [Data visualization](#data-visualization)
 - [Data analysis](#data-analysis)
+- [Reporting system](#reporting-system)
 - [Screencast](#screencast)
 - [Support and service](#support-and-service)
 
@@ -195,6 +196,37 @@ Section in development.
 
 [Return to Table of Contents](#contents)
 
+## Reporting system
+
+The application has a function for creating reports in PDF format.
+
+### Customising report parameters
+
+To customise the report parameters, you need to select the appropriate profile, job and query and then select the corresponding 
+metric or query column in the **Report** interface. On the **Design** tab, there is an option to select a date range.
+After displaying the design of the future report, you can edit the description, you can select the desired one from the **Count**, **Sum** and
+**Average**. For numeric values any of these functions can be selected, for string data it is not possible to call **Count**, **Sum** and **Average** functions.
+calculation of the average value.
+
+![Design](media/report/design.png#center)
+
+
+### Report generation
+
+After the user has configured all the necessary parameters of the report, he starts the process of generating the report using
+the button **Report** <a href="media/report/report.gif"  target="_blank">Screencast</a>
+
+
+### Viewing the report
+
+The created PDF report is displayed on the **Report** tab, designed for viewing reports. The report contains all the data from the design: graphs, tables and comments.
+
+![Report](media/report/report.png#center)
+
+### Exporting a report
+
+The user is given the opportunity to export the report in PDF format. To do this, use the **Save** button to select the directory to save the report file.
+
 ## Screencast
 
 |              | Screencast                                                                        |
@@ -208,6 +240,7 @@ Section in development.
 | Real-time    | <a href="media/view/real-time.gif"  target="_blank">Screencast real-time </a>     |
 | History      | <a href="media/view/history.gif"  target="_blank">Screencast history </a>         |
 | Ad-hoc query | <a href="media/view/search.gif"  target="_blank">Screencast ad-hoc </a>           |
+| Report       | <a href="media/report/report.gif"  target="_blank">Screencast report</a>          |   
 
 [Return to Table of Contents](#contents)
 

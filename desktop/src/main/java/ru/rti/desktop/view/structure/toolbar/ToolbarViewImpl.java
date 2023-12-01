@@ -37,13 +37,10 @@ public class ToolbarViewImpl extends JToolBar implements ToolbarView {
         this.add(this.toolbarConfigButton);
         this.add(Box.createRigidArea(new Dimension(10, 0)));
         this.add(this.toolbarTemplateButton);
-        /**
-         * TODO
-         * In development Report system
-         *
-         *     this.add(Box.createRigidArea(new Dimension(10, 0)));
-         *     this.add(this.toolbarReportButton);
-         */
+
+        this.add(Box.createRigidArea(new Dimension(10, 0)));
+        this.add(this.toolbarReportButton);
+
     }
 
     @Override

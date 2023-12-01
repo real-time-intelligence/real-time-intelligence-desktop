@@ -5,17 +5,17 @@ import dagger.Provides;
 import org.fbase.core.FStore;
 import ru.rti.desktop.config.prototype.WorkspaceDetailScope;
 import ru.rti.desktop.router.event.EventListener;
-import ru.rti.desktop.view.detail.GanttDataPanel;
+import ru.rti.desktop.view.detail.gantt.MainGanttPanel;
 
 import javax.inject.Named;
 import java.util.concurrent.ScheduledExecutorService;
 
 @Module
 public class WorkspaceGanttModule {
-  private final GanttDataPanel ganttDataPanel;
+  private final MainGanttPanel mainGanttPanel;
 
-  public WorkspaceGanttModule(GanttDataPanel ganttDataPanel) {
-    this.ganttDataPanel = ganttDataPanel;
+  public WorkspaceGanttModule(MainGanttPanel mainGanttPanel) {
+    this.mainGanttPanel = mainGanttPanel;
   }
 
   @WorkspaceDetailScope

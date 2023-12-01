@@ -7,6 +7,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicInteger;
 import javax.inject.Inject;
 import javax.inject.Named;
 import javax.inject.Singleton;
@@ -22,17 +23,13 @@ import ru.rti.desktop.helper.ReportHelper;
 import ru.rti.desktop.manager.ConfigurationManager;
 import ru.rti.desktop.manager.ProfileManager;
 import ru.rti.desktop.model.ProfileTaskQueryKey;
-import ru.rti.desktop.model.column.MetricsColumnNames;
 import ru.rti.desktop.model.column.ProfileColumnNames;
+import ru.rti.desktop.model.column.QueryColumnNames;
 import ru.rti.desktop.model.column.TaskColumnNames;
 import ru.rti.desktop.model.config.ConfigClasses;
-import ru.rti.desktop.model.config.Metric;
 import ru.rti.desktop.model.config.Profile;
 import ru.rti.desktop.model.info.QueryInfo;
-import ru.rti.desktop.model.info.TableInfo;
 import ru.rti.desktop.model.info.TaskInfo;
-import ru.rti.desktop.model.report.CProfileReport;
-import ru.rti.desktop.model.report.MetricReport;
 import ru.rti.desktop.model.report.QueryReportData;
 import ru.rti.desktop.model.table.JXTableCase;
 import ru.rti.desktop.model.view.ReportState;
@@ -51,8 +48,6 @@ public class ReportPresenter extends WindowAdapter implements ReportListener, Li
     private final JXTableCase queryReportCase;
     private final ConfigurationManager configurationManager;
     private final EventListener eventListener;
-    private final JXTableCase reportMetricsCase;
-    private final JXTableCase reportColumnCase;
     private final Map<ProfileTaskQueryKey, QueryReportData> mapReportData;
     private final List<File> designSaveDirs;
     private final List<File> designReportDirs;
@@ -68,8 +63,6 @@ public class ReportPresenter extends WindowAdapter implements ReportListener, Li
                            @Named("queryReportCase") JXTableCase queryReportCase,
                            @Named("configurationManager") ConfigurationManager configurationManager,
                            @Named("eventListener") EventListener eventListener,
-                           @Named("reportMetricsCase") JXTableCase reportMetricsCase,
-                           @Named("reportColumnCase") JXTableCase reportColumnCase,
                            @Named("mapReportData") Map<ProfileTaskQueryKey, QueryReportData> mapReportData,
                            @Named("reportTaskPanel") ReportTabsPane reportTabsPane,
                            FilesHelper filesHelper,
@@ -79,8 +72,6 @@ public class ReportPresenter extends WindowAdapter implements ReportListener, Li
         this.profileReportCase = profileReportCase;
         this.taskReportCase = taskReportCase;
         this.queryReportCase = queryReportCase;
-        this.reportMetricsCase = reportMetricsCase;
-        this.reportColumnCase = reportColumnCase;
         this.configurationManager = configurationManager;
         this.eventListener = eventListener;
         this.eventListener.addReportStateListener(this);
@@ -88,14 +79,12 @@ public class ReportPresenter extends WindowAdapter implements ReportListener, Li
         this.taskReportCase.getJxTable().getSelectionModel().addListSelectionListener(this);
         this.queryReportCase.getJxTable().getSelectionModel().addListSelectionListener(this);
         this.mapReportData = mapReportData;
-        //this.profileCase.getJxTable().addMouseListener(this);
 
         this.reportTabsPane = reportTabsPane;
         this.designSaveDirs = new ArrayList<>();
         this.designReportDirs = new ArrayList<>();
         this.filesHelper = filesHelper;
         this.reportHelper = reportHelper;
-
     }
 
     @Override
@@ -122,7 +111,6 @@ public class ReportPresenter extends WindowAdapter implements ReportListener, Li
             if (profileReportCase.getDefaultTableModel().getRowCount() != 0) {
                 profileReportCase.getJxTable().setRowSelectionInterval(0, 0);
             }
-
         }
     }
 
@@ -174,6 +162,7 @@ public class ReportPresenter extends WindowAdapter implements ReportListener, Li
                         if (Objects.isNull(profileManager.getTaskInfoById(taskId))) {
                             throw new NotFoundException("Not found task: " + taskId);
                         } else {
+                            AtomicInteger row = new AtomicInteger();
                             profileManager.getTaskInfoById(taskId)
                                     .getQueryInfoList()
                                     .forEach(queryId -> {
@@ -181,8 +170,14 @@ public class ReportPresenter extends WindowAdapter implements ReportListener, Li
                                         if (Objects.isNull(queryIn)) {
                                             throw new NotFoundException("Not found query: " + queryId);
                                         }
-                                        queryReportCase.getDefaultTableModel().addRow(new Object[]{queryIn.getId(), queryIn.getName()});
+                                        queryReportCase.getDefaultTableModel().addRow(new Object[0]);
+                                        queryReportCase.getJxTable().setValueAt(false, row.get(), 0);
+                                        queryReportCase.getDefaultTableModel().setValueAt(queryIn.getId(), row.get(), 0);
+                                        queryReportCase.getDefaultTableModel().setValueAt(queryIn.getName(), row.get(), 2);
+                                        row.getAndIncrement();
                                     });
+                            queryReportCase.getJxTable().repaint();
+                            queryReportCase.getJxTable().revalidate();
                         }
                         if (queryReportCase.getDefaultTableModel().getRowCount() > 0) {
                             queryReportCase.getJxTable().setRowSelectionInterval(0, 0);
@@ -191,86 +186,33 @@ public class ReportPresenter extends WindowAdapter implements ReportListener, Li
                             queryReportCase.getDefaultTableModel().fireTableDataChanged();
                         }
                     } else {
-                        profileManager.getQueryInfoList()
-                                .forEach(f -> queryReportCase.getDefaultTableModel().addRow(new Object[]{f.getId(), f.getName()}));
-                    }
-                }
-                if (e.getSource() == queryReportCase.getJxTable().getSelectionModel()) {
-                    reportMetricsCase.getDefaultTableModel().getDataVector().removeAllElements();
-                    reportMetricsCase.getDefaultTableModel().fireTableDataChanged();
-
-                    reportColumnCase.getDefaultTableModel().getDataVector().removeAllElements();
-                    reportColumnCase.getDefaultTableModel().fireTableDataChanged();
-
-                    int profileId = (int) profileReportCase.getDefaultTableModel()
-                            .getValueAt(profileReportCase.getJxTable()
-                                    .getSelectedRow(), profileReportCase.getDefaultTableModel()
-                                    .findColumn(ProfileColumnNames.ID.getColName()));
-                    int taskId = (int) taskReportCase.getDefaultTableModel()
-                            .getValueAt(taskReportCase.getJxTable()
-                                    .getSelectedRow(), taskReportCase.getDefaultTableModel()
-                                    .findColumn(TaskColumnNames.ID.getColName()));
-                    int queryId = GUIHelper.getIdByColumnName(queryReportCase.getJxTable(),
-                            queryReportCase.getDefaultTableModel(),
-                            listSelectionModel, TaskColumnNames.ID.getColName());
-
-                    QueryInfo query = profileManager.getQueryInfoById(queryId);
-                    List<Metric> metricList = query.getMetricList();
-
-                    for (int i = 0; i < metricList.size(); i++) {
-                        reportMetricsCase.getDefaultTableModel().addRow(new Object[0]);
-                        reportMetricsCase.getDefaultTableModel().setValueAt(false, i, 1);
-                        reportMetricsCase.getDefaultTableModel().setValueAt(metricList.get(i).getId(), i, 0);
-                        reportMetricsCase.getDefaultTableModel().setValueAt(metricList.get(i).getName(), i, 2);
-                    }
-
-
-                    TableInfo table = profileManager.getTableInfoByTableName(query.getName());
-                    if (table != null && table.getCProfiles() != null) {
-                        table.getCProfiles().stream()
-                                .filter(f -> !f.getCsType().isTimeStamp())
-                                .forEach(cProfile -> reportColumnCase.getDefaultTableModel()
-                                        .addRow(new Object[]{cProfile.getColId(), new Object[]{}, cProfile.getColName()}));
-                    }
-
-                    ProfileTaskQueryKey key = new ProfileTaskQueryKey(profileId, taskId, queryId);
-
-                    if (!mapReportData.isEmpty()) {
-                        if (mapReportData.containsKey(key)) {
-                            QueryReportData val = mapReportData.get(key);
-                            List<MetricReport> listMetric = val.getMetricReportList();
-                            List<CProfileReport> listColumn = val.getCProfileReportList();
-
-                            for (MetricReport m : listMetric) {
-                                for (int row = 0; row < reportMetricsCase.getJxTable().getRowCount(); row++) {
-                                    int metricId = (int) reportMetricsCase.getDefaultTableModel()
-                                            .getValueAt(row, reportMetricsCase.getDefaultTableModel()
-                                                    .findColumn(MetricsColumnNames.ID.getColName()));
-                                    if (m.getId() == metricId) {
-                                        reportMetricsCase.getJxTable().setValueAt(true, row, 0);
-                                    }
-                                }
-                            }
-                            reportMetricsCase.getJxTable().repaint();
-                            reportMetricsCase.getJxTable().revalidate();
-
-                            for (CProfileReport c : listColumn) {
-                                for (int row = 0; row < reportColumnCase.getJxTable().getRowCount(); row++) {
-                                    int columnId = (int) reportColumnCase.getDefaultTableModel()
-                                            .getValueAt(row, reportColumnCase.getDefaultTableModel()
-                                                    .findColumn(MetricsColumnNames.ID.getColName()));
-                                    if (c.getColId() == columnId) {
-                                        reportColumnCase.getJxTable().setValueAt(true, row, 0);
-                                    }
-                                }
-                            }
-                            reportColumnCase.getJxTable().repaint();
-                            reportColumnCase.getJxTable().revalidate();
+                        List<QueryInfo> queyrList = profileManager.getQueryInfoList();
+                        for (int i = 0; i < queyrList.size(); i++) {
+                            queryReportCase.getDefaultTableModel().addRow(new Object[0]);
+                            queryReportCase.getDefaultTableModel().setValueAt(false, i, 1);
+                            queryReportCase.getDefaultTableModel().setValueAt(queyrList.get(i).getId(), i, 0);
+                            queryReportCase.getDefaultTableModel().setValueAt(queyrList.get(i).getName(), i, 2);
                         }
                     }
-
+                    if (!mapReportData.isEmpty()) {
+                        for (ProfileTaskQueryKey key : mapReportData.keySet()) {
+                            int profileId = (int) profileReportCase.getDefaultTableModel()
+                                    .getValueAt(profileReportCase.getJxTable().getSelectedRow()
+                                            , profileReportCase.getDefaultTableModel()
+                                                    .findColumn(ProfileColumnNames.ID.getColName()));
+                            if (profileId == key.getProfileId() && taskId == key.getTaskId()){
+                                for (int row = 0; row < queryReportCase.getJxTable().getRowCount(); row++) {
+                                    int queryId = (int) queryReportCase.getDefaultTableModel()
+                                            .getValueAt(row, queryReportCase.getDefaultTableModel()
+                                                    .findColumn(QueryColumnNames.ID.getColName()));
+                                    if(queryId == key.getQueryId()){
+                                        queryReportCase.getJxTable().setValueAt(true, row,0);
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
-
             }
         }
 

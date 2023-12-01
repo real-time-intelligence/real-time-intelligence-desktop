@@ -13,13 +13,19 @@ import org.jfree.chart.util.IDetailPanel;
 import ru.rti.desktop.exception.NotFoundException;
 import ru.rti.desktop.model.ProfileTaskQueryKey;
 import ru.rti.desktop.model.chart.CategoryTableXYDatasetRealTime;
+import ru.rti.desktop.model.config.Metric;
 import ru.rti.desktop.model.info.QueryInfo;
 import ru.rti.desktop.model.info.gui.ChartInfo;
 import ru.rti.desktop.model.view.RangeChartHistory;
 import ru.rti.desktop.router.listener.ShowLocalHistoryListener;
 import ru.rti.desktop.view.chart.DetailChart;
+import ru.rti.desktop.view.chart.FunctionDataHandler;
 import ru.rti.desktop.view.chart.HelperChart;
 import ru.rti.desktop.view.chart.StackedChart;
+import ru.rti.desktop.view.chart.stacked.function.AsIsMetricFunctionHandler;
+import ru.rti.desktop.view.chart.stacked.function.AverageMetricFunctionHandler;
+import ru.rti.desktop.view.chart.stacked.function.CountMetricFunctionHandler;
+import ru.rti.desktop.view.chart.stacked.function.SumMetricFunctionHandler;
 
 
 import javax.swing.*;
@@ -40,7 +46,7 @@ public abstract class StackChartReportPanel extends JPanel implements DetailChar
     protected final ChartInfo chartInfo;
 
 
-    protected final CProfile cProfile;
+    protected final Metric metric;
 
     protected StackedChart stackedChart;
     private ChartPanel chartPanel;
@@ -61,24 +67,27 @@ public abstract class StackChartReportPanel extends JPanel implements DetailChar
     protected double range;
 
     protected final FStore fStore;
+    protected FunctionDataHandler dataHandler;
 
 
     public StackChartReportPanel(CategoryTableXYDatasetRealTime categoryTableXYDatasetRealTime,
                                  ProfileTaskQueryKey profileTaskQueryKey,
                                  QueryInfo queryInfo,
                                  ChartInfo chartInfo,
-                                 CProfile cProfile,
+                                 Metric metric,
                                  FStore fStore) {
 
         this.categoryTableXYDatasetRealTime = categoryTableXYDatasetRealTime;
         this.profileTaskQueryKey = profileTaskQueryKey;
         this.queryInfo = queryInfo;
         this.chartInfo = chartInfo;
-        this.cProfile = cProfile;
+        this.metric = metric;
         this.fStore = fStore;
 
-        if (cProfile.getCsType() == null) {
-            throw new NotFoundException("Column storage type is undefined for column profile: " + cProfile);
+        this.initFunctionDataHandler(metric);
+
+        if (metric.getYAxis().getCsType() == null) {
+            throw new NotFoundException("Column storage type is undefined for column profile: " + metric.getYAxis());
         }
 
         this.series = new LinkedHashSet<>();
@@ -90,6 +99,15 @@ public abstract class StackChartReportPanel extends JPanel implements DetailChar
         this.stackedChart = new StackedChart(getChartPanel(this.categoryTableXYDatasetRealTime));
         this.stackedChart.setLegendFontSize(legendFontSize);
         this.stackedChart.initialize();
+    }
+
+    private void initFunctionDataHandler(Metric metric) {
+        switch (metric.getMetricFunction()) {
+            case ASIS -> dataHandler = new AsIsMetricFunctionHandler(metric, queryInfo, fStore);
+            case COUNT -> dataHandler = new CountMetricFunctionHandler(metric, queryInfo, fStore);
+            case SUM -> dataHandler = new SumMetricFunctionHandler(metric, queryInfo, fStore);
+            case AVERAGE -> dataHandler = new AverageMetricFunctionHandler(metric, queryInfo, fStore);
+        }
     }
 
     public abstract void initialize();
@@ -113,7 +131,7 @@ public abstract class StackChartReportPanel extends JPanel implements DetailChar
     }
 
     protected ChartPanel getChartPanel(CategoryTableXYDatasetRealTime categoryTableXYDataset) {
-        xAxisLabel = cProfile.getColName();
+        xAxisLabel = metric.getYAxis().getColName();
         dateAxis = new DateAxis();
         jFreeChart = ChartFactory.createStackedXYAreaChart("", xAxisLabel, yAxisLabel, categoryTableXYDataset,
                 PlotOrientation.VERTICAL, dateAxis, false, true, false);

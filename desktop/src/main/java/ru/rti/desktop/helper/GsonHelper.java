@@ -1,5 +1,8 @@
 package ru.rti.desktop.helper;
 
+import static ru.rti.desktop.helper.FilesHelper.CONFIG_JSON_DIR_NAME;
+import static ru.rti.desktop.helper.FilesHelper.FILE_SEPARATOR_JAVA;
+
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 import java.io.FileReader;
@@ -91,7 +94,7 @@ public class GsonHelper {
 
         try {
             if (filesHelper.isJar()) {
-                List<String> pathList = filesHelper.getFilePathDirectoryResourcesJar(getEntityTypeName(clazz));
+                List<String> pathList = filesHelper.getFileContentDirectoryResourcesJar(CONFIG_JSON_DIR_NAME + FILE_SEPARATOR_JAVA + getEntityTypeName(clazz));
                 pathList.forEach(file -> {
                     T object = gson.fromJson(file, clazz);
 
@@ -100,7 +103,7 @@ public class GsonHelper {
                     }
                 });
             } else {
-                List<Path> pathList = filesHelper.getFilePathDirectoryResourcesFromFS(getEntityTypeName(clazz));
+                List<Path> pathList = filesHelper.getFilePathDirectoryResourcesFromFS(CONFIG_JSON_DIR_NAME + FILE_SEPARATOR_JAVA + getEntityTypeName(clazz));
                 pathList.forEach(file -> addFileToEntityList(clazz, file, entityList));
             }
         } catch (URISyntaxException | IOException e) {

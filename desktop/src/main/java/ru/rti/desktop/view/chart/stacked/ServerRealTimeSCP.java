@@ -118,18 +118,24 @@ public class ServerRealTimeSCP extends StackChartPanel {
         } else {
             log.info("Handle regular update");
 
-            log.info(toLocalDateTimeOfEpochMilli((long) stackedChart.getEndXValue()));
+            long endXValue = (long) stackedChart.getEndXValue();
 
-            if ((begin - stackedChart.getEndXValue()) > (range * 2)) {
+            if (endXValue < (end - getRangeRealTime(chartInfo))) {
+                endXValue = end - getRangeRealTime(chartInfo);
+            }
+
+            log.info(toLocalDateTimeOfEpochMilli(endXValue));
+
+            if ((begin - endXValue) > (range * 2)) {
                 log.info("Handle gaps after pause");
-                if (stackedChart.getEndXValue() > beginCurrentRange) {
-                    fillWithEmptyStackedChart((long) (stackedChart.getEndXValue() + 1), begin - 1);
+                if (endXValue > beginCurrentRange) {
+                    fillWithEmptyStackedChart((endXValue + 1), begin - 1);
                 }
             }
 
-            if ((end - stackedChart.getEndXValue()) > range) {
+            if ((end - endXValue) > range) {
                 log.info("Load data when range lower that pull timeout");
-                fillStackedChart((long) stackedChart.getEndXValue() + 1, end);
+                fillStackedChart(endXValue + 1, end);
             }
 
             stackedChart.deleteAllSeriesData(chartInfo.getRange());

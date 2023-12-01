@@ -9,6 +9,7 @@ import lombok.Getter;
 import lombok.extern.log4j.Log4j2;
 import org.fbase.model.profile.cstype.CType;
 import ru.rti.desktop.helper.GUIHelper;
+import ru.rti.desktop.model.column.MetricsColumnNames;
 import ru.rti.desktop.model.config.Metric;
 import ru.rti.desktop.model.db.TimestampType;
 import ru.rti.desktop.model.function.ChartType;
@@ -46,7 +47,7 @@ public class DetailsControlPanelHandler implements ActionListener {
     if (e.getSource() == detailsControlPanel.getSaveButton()) {
       log.info("Save metric button clicked");
 
-      JTextFieldCase jTextFieldCase = GUIHelper.getJTextFieldCase("Metric name");
+      JTextFieldCase jTextFieldCase = GUIHelper.getJTextFieldCase(MetricsColumnNames.METRIC_NAME.getColName());
 
       int input = JOptionPane.showOptionDialog(null,
           jTextFieldCase.getJPanel(),"Create new metric?",

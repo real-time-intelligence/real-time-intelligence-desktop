@@ -47,7 +47,7 @@ public class ClientHistorySCP extends StackChartPanel {
 
             long dtEnd = dtBegin + Math.round(range) - 1;
 
-            double k = (double) batchSize / chartInfo.getPullTimeout();
+            double k = (double) Math.round(range) / 1000;
 
             dataHandler.handleFunction(chartInfo, dtBegin, dtEnd,false, dtBegin, k, series, stackedChart);
         }

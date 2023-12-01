@@ -19,7 +19,7 @@ public class NavigatorConfig {
   @Named("navigatorProfileCase")
   public JXTableCase getTemplateConnCase() {
     JXTableCase jxTableCase = GUIHelper.getJXTableCase(100,
-        new String[]{ProfileColumnNames.ID.getColName(), ProfileColumnNames.NAME.getColName(),});
+        new String[]{ProfileColumnNames.ID.getColName(), "Profile name",});
     jxTableCase.getJxTable().getTableHeader().setVisible(true);
     jxTableCase.getJxTable().setSortable(false);
     return jxTableCase;

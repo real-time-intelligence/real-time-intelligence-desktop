@@ -3,6 +3,9 @@ package ru.rti.desktop.model.column;
 public enum MetricsColumnNames {
   ID("id"),
   NAME("Name"),
+  COLUMN_NAME("Column name"),
+  METRIC_NAME("Metric name"),
+  PICK("Pick"),
   IS_DEFAULT("Default"),
   X_AXIS("X Axis"),
   Y_AXIS("Y Axis"),

@@ -7,18 +7,13 @@ import com.egantt.model.drawing.DrawingContext;
 import com.egantt.model.drawing.DrawingPart;
 import com.egantt.model.drawing.axis.interval.LongInterval;
 import com.egantt.model.drawing.state.BasicDrawingState;
-import com.egantt.swing.table.list.BasicJTableList;
 import com.egantt.swing.table.model.column.ColumnManager;
 import com.egantt.swing.table.model.column.manager.BasicColumnManager;
 import ext.egantt.actions.DrawingTool;
 import ext.egantt.component.holder.SplitLayeredHolder;
 import ext.egantt.drawing.GanttDynamicComponentUtilities;
-import java.util.Map;
-import org.jdesktop.swingx.JXTable;
-
-import javax.swing.*;
-import javax.swing.table.*;
-import java.awt.*;
+import java.awt.Color;
+import java.awt.Graphics;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.event.MouseListener;
@@ -26,8 +21,16 @@ import java.awt.event.MouseMotionListener;
 import java.util.Comparator;
 import java.util.Date;
 import java.util.Iterator;
-import java.util.List;
+import java.util.Map;
 import java.util.stream.IntStream;
+import javax.swing.JPopupMenu;
+import javax.swing.table.JTableHeader;
+import javax.swing.table.TableCellEditor;
+import javax.swing.table.TableCellRenderer;
+import javax.swing.table.TableColumnModel;
+import javax.swing.table.TableModel;
+import javax.swing.table.TableRowSorter;
+import org.jdesktop.swingx.JXTable;
 
 public class GanttTable extends SplitLayeredHolder {
 	
@@ -293,17 +296,28 @@ public class GanttTable extends SplitLayeredHolder {
 		}
 	}
 
-	public void setRowHeightForJtable(int rowHeightForJtable)
+	public void setRowHeightForJTable(int rowHeightForJTable)
 	{
 		if(componentList == null)
 			return;
 		for(int i = 0; i < componentList.size(); i++)
 		{
 			JXTable table = (JXTable)componentList.get(i);
-			table.setRowHeight(rowHeightForJtable);
+			table.setRowHeight(rowHeightForJTable);
 		}
-
 	}
+
+	public void setVisibleRowCount(int visibleRowCount)
+	{
+		if(componentList == null)
+			return;
+		for(int i = 0; i < componentList.size(); i++)
+		{
+			JXTable table = (JXTable)componentList.get(i);
+			table.setVisibleRowCount(visibleRowCount);
+		}
+	}
+
 /*
 	public void setLongComparatorByColumn(int columnIndex){
 		TableRowSorter<TableModel> rowSorter = new TableRowSorter<>(getJXTable().getModel());

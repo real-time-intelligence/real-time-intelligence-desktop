@@ -33,6 +33,7 @@ import ru.rti.desktop.view.pane.ChartJTabbedPane;
 import ru.rti.desktop.view.panel.RangeChartHistoryPanel;
 import ru.rti.desktop.view.panel.RangeChartRealTimePanel;
 import ru.rti.desktop.view.structure.workspace.query.CustomHistoryPanel;
+import ru.rti.desktop.view.structure.workspace.query.DetailsControlPanel;
 
 @Log4j2
 public class TimeRangeQuickHandler extends ChartHandler
@@ -59,9 +60,10 @@ public class TimeRangeQuickHandler extends ChartHandler
                                  QueryInfo queryInfo,
                                  TableInfo tableInfo,
                                  ChartInfo chartInfo,
+                                 DetailsControlPanel detailsControlPanel,
                                  WorkspaceQueryComponent workspaceQueryComponent) {
         super(chartJTabbedPane, jxTableCaseMetrics, jxTableCaseColumns, tableInfo, queryInfo, chartInfo,
-            profileTaskQueryKey, chartGanttPanelRealTime, chartGanttPanelHistory, workspaceQueryComponent);
+            profileTaskQueryKey, chartGanttPanelRealTime, chartGanttPanelHistory, detailsControlPanel, workspaceQueryComponent);
 
         this.customHistoryPanel = customHistoryPanel;
 

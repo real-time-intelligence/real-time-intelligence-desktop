@@ -76,7 +76,7 @@ public class MetricColumnSelectionHandler extends ChartHandler implements ListSe
                                       WorkspaceTaskComponent workspaceTaskComponent,
                                       WorkspaceQueryComponent workspaceQueryComponent) {
     super(chartJTabbedPane, jxTableCaseMetrics, jxTableCaseColumns, tableInfo, queryInfo, chartInfo,
-        profileTaskQueryKey, chartGanttPanelRealTime, chartGanttPanelHistory, workspaceQueryComponent);
+        profileTaskQueryKey, chartGanttPanelRealTime, chartGanttPanelHistory, detailsControlPanel, workspaceQueryComponent);
 
     this.profileTaskQueryKey = profileTaskQueryKey;
     this.queryInfo = queryInfo;
@@ -298,7 +298,7 @@ public class MetricColumnSelectionHandler extends ChartHandler implements ListSe
 
     public RadioListenerColumn() {}
 
-    public void actionPerformed(ActionEvent e){
+    public void actionPerformed(ActionEvent e) {
       JRadioButton button = (JRadioButton) e.getSource();
 
       switch (button.getText()) {
@@ -316,7 +316,6 @@ public class MetricColumnSelectionHandler extends ChartHandler implements ListSe
         }
       }
     }
-
   }
 
 }

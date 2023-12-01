@@ -33,6 +33,7 @@ import ru.rti.desktop.model.view.workspase.RelativeDatePane;
 import ru.rti.desktop.router.event.EventListener;
 import ru.rti.desktop.view.pane.ChartJTabbedPane;
 import ru.rti.desktop.view.panel.TimeRangeRelativePanel;
+import ru.rti.desktop.view.structure.workspace.query.DetailsControlPanel;
 
 @Log4j2
 public class TimeRangeRelativeHandler extends ChartHandler implements ActionListener, ChangeListener, MouseListener {
@@ -73,9 +74,10 @@ public class TimeRangeRelativeHandler extends ChartHandler implements ActionList
                                     QueryInfo queryInfo,
                                     TableInfo tableInfo,
                                     ChartInfo chartInfo,
+                                    DetailsControlPanel detailsControlPanel,
                                     WorkspaceQueryComponent workspaceQueryComponent) {
         super(chartJTabbedPane, jxTableCaseMetrics, jxTableCaseColumns, tableInfo, queryInfo, chartInfo,
-                profileTaskQueryKey, chartGanttPanelRealTime, chartGanttPanelHistory, workspaceQueryComponent);
+                profileTaskQueryKey, chartGanttPanelRealTime, chartGanttPanelHistory, detailsControlPanel, workspaceQueryComponent);
 
         this.timeRangeRelativePanel = timeRangeRelativePanel;
         this.timeRangeRelativePanel.getJButtonFrom().addActionListener(this);

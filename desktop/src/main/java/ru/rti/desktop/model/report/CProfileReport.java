@@ -5,6 +5,6 @@ import org.fbase.model.profile.CProfile;
 @EqualsAndHashCode(callSuper = true)
 @Data
 public class CProfileReport extends CProfile {
-    private String comment;
 
+    private String comment;
 }

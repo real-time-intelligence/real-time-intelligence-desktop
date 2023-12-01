@@ -1,21 +1,27 @@
 package ru.rti.desktop.view.handler.report.design;
 
+import static ru.rti.desktop.helper.FilesHelper.CONFIG_FTL_DIR_NAME;
+import static ru.rti.desktop.helper.FilesHelper.CONFIG_TTF_DIR_NAME;
+import static ru.rti.desktop.model.function.ChartType.LINEAR;
+import static ru.rti.desktop.model.function.ChartType.STACKED;
+
 import com.itextpdf.text.Document;
-import com.itextpdf.text.DocumentException;
+import com.itextpdf.text.FontFactory;
+import com.itextpdf.text.PageSize;
 import com.itextpdf.text.pdf.PdfWriter;
+import com.itextpdf.tool.xml.XMLWorkerFontProvider;
 import com.itextpdf.tool.xml.XMLWorkerHelper;
 import freemarker.template.Configuration;
 import freemarker.template.Template;
-import freemarker.template.TemplateException;
+import java.net.URISyntaxException;
 import lombok.extern.log4j.Log4j2;
-import org.apache.pdfbox.pdmodel.PDDocument;
-import org.apache.pdfbox.rendering.PDFRenderer;
 import org.fbase.core.FStore;
 import org.fbase.model.profile.CProfile;
+import org.fbase.model.profile.cstype.CType;
 import org.jdesktop.swingx.*;
-import org.jfree.chart.ChartUtilities;
 import ru.rti.desktop.exception.NotFoundException;
 import ru.rti.desktop.helper.FilesHelper;
+import ru.rti.desktop.helper.GUIHelper;
 import ru.rti.desktop.helper.ReportHelper;
 import ru.rti.desktop.manager.ProfileManager;
 import ru.rti.desktop.manager.ReportManager;
@@ -26,6 +32,8 @@ import ru.rti.desktop.model.column.ProfileColumnNames;
 import ru.rti.desktop.model.column.QueryColumnNames;
 import ru.rti.desktop.model.column.TaskColumnNames;
 import ru.rti.desktop.model.config.Metric;
+import ru.rti.desktop.model.db.TimestampType;
+import ru.rti.desktop.model.function.MetricFunction;
 import ru.rti.desktop.model.info.ProfileInfo;
 import ru.rti.desktop.model.info.QueryInfo;
 import ru.rti.desktop.model.info.TableInfo;
@@ -41,6 +49,7 @@ import ru.rti.desktop.router.event.EventListener;
 import ru.rti.desktop.view.chart.report.StackChartReportPanel;
 import ru.rti.desktop.view.panel.report.*;
 
+import javax.imageio.ImageIO;
 import javax.inject.Inject;
 import javax.inject.Named;
 import javax.inject.Singleton;
@@ -48,6 +57,8 @@ import javax.swing.*;
 import javax.swing.border.EtchedBorder;
 import javax.swing.event.CellEditorListener;
 import javax.swing.event.ChangeEvent;
+import javax.swing.event.ListSelectionEvent;
+import javax.swing.event.ListSelectionListener;
 import javax.swing.table.TableCellEditor;
 import java.awt.*;
 import java.awt.event.*;
@@ -62,44 +73,38 @@ import java.time.ZoneId;
 import java.util.*;
 import java.util.List;
 
-
 @Log4j2
 @Singleton
-public class DesignPanelHandler extends ChartReportHandler implements ActionListener {
-
+public class DesignPanelHandler extends ChartReportHandler implements ActionListener, ListSelectionListener {
     private final Map<ProfileTaskQueryKey, QueryReportData> mapReportData;
     private final ReportTabsPane reportTabsPane;
     private final JXTableCase profileReportCase;
     private final JXTableCase taskReportCase;
     private final JXTableCase queryReportCase;
-
-    private final JXTableCase reportMetricsCase;
-    private final JXTableCase reportColumnCase;
-    private final DefaultCellEditor cEditor;
-    private final DefaultCellEditor mEditor;
+    private final DefaultCellEditor queryEditor;
     private final JXTaskPaneContainer containerCardDesign;
-    private final JXTaskPaneContainer containerChartCardDesign;
     private final FilesHelper filesHelper;
     private final ReportManager reportManager;
     private List<File> designSaveDirs;
     private List<File> designReportDirs;
     private final ReportHelper reportHelper;
-    private PathPdfInfo reportPdfPath;
-
+    private final PathPdfInfo reportPdfPath;
+    private JPanel containerChartCardDesign;
+    private int savedRow;
+    private int previousSelectedRow = -1;
+    private int selectedRow;
+    private final Object[] options = {"Overwrite", "Save", "Cancel"};
 
     @Inject
     public DesignPanelHandler(
             @Named("profileReportCase") JXTableCase profileReportCase,
             @Named("taskReportCase") JXTableCase taskReportCase,
             @Named("queryReportCase") JXTableCase queryReportCase,
-            @Named("reportMetricsCase") JXTableCase reportMetricsCase,
-            @Named("reportColumnCase") JXTableCase reportColumnCase,
             @Named("reportTaskPanel") ReportTabsPane reportTabsPane,
             @Named("profileManager") ProfileManager profileManager,
             @Named("eventListener") EventListener eventListener,
             @Named("mapReportData") Map<ProfileTaskQueryKey, QueryReportData> mapReportData,
             @Named("containerCardDesign") JXTaskPaneContainer containerCardDesign,
-            @Named("containerChartCardDesign") JXTaskPaneContainer containerChartCardDesign,
             @Named("reportPdfPath") PathPdfInfo reportPdfPath,
             @Named("localDB") FStore fStore,
             @Named("reportManager") ReportManager reportManager,
@@ -111,186 +116,67 @@ public class DesignPanelHandler extends ChartReportHandler implements ActionList
         this.profileReportCase = profileReportCase;
         this.taskReportCase = taskReportCase;
         this.queryReportCase = queryReportCase;
-        this.reportMetricsCase = reportMetricsCase;
-        this.reportColumnCase = reportColumnCase;
         this.mapReportData = mapReportData;
         this.containerCardDesign = containerCardDesign;
-        this.containerChartCardDesign = containerChartCardDesign;
         this.reportTabsPane = reportTabsPane;
         this.filesHelper = filesHelper;
         this.reportHelper = reportHelper;
         this.reportManager = reportManager;
         this.reportPdfPath = reportPdfPath;
+        this.containerChartCardDesign = new JPanel();
 
-        this.reportTabsPane.addComponentListener(new ComponentAdapter() {
-            @Override
-            public void componentResized(ComponentEvent e) {
-                int newHeight = e.getComponent().getHeight();
-                int topPanelHeight = newHeight - reportTabsPane.getJspMenuDesign().getDividerLocation();
+        this.savedRow = -1;
+        this.selectedRow = -1;
 
-                reportTabsPane.getJspMenuDesign().setDividerLocation(topPanelHeight);
-            }
-        });
-
-        updateReportSaveComboBox();
+        updateDesignReportCase();
         updateSavedReportCase();
 
         this.reportTabsPane.getShowBtnDesign().addActionListener(this);
         this.reportTabsPane.getCollapseBtnDesign().addActionListener(this);
         this.reportTabsPane.getSaveBtnDesign().addActionListener(this);
+        this.reportTabsPane.getDelBtnDesign().addActionListener(this);
         this.reportTabsPane.getClearBtnDesign().addActionListener(this);
         this.reportTabsPane.getGenerateReportBtnDesign().addActionListener(this);
-        this.reportTabsPane.getOpenBtnDesign().addActionListener(this);
+        this.reportTabsPane.getDesignReportCase().getJxTable().getSelectionModel().addListSelectionListener(this);
 
-        this.cEditor = new DefaultCellEditor(new JCheckBox());
-        this.reportColumnCase.getJxTable().getColumnModel().getColumn(0).setCellEditor(cEditor);
+        this.queryEditor = new DefaultCellEditor(new JCheckBox());
+        this.queryReportCase.getJxTable().getColumnModel().getColumn(0).setCellEditor(queryEditor);
 
-        cEditor.addCellEditorListener(new CellEditorListener() {
+        queryEditor.addCellEditorListener(new CellEditorListener() {
             @Override
             public void editingStopped(ChangeEvent e) {
+                TableCellEditor editor = (TableCellEditor) e.getSource();
+                Boolean qValue = (Boolean) editor.getCellEditorValue();
 
                 ProfileTaskQueryKey key = getProfileTaskQueryKey();
 
-                mapReportData.putIfAbsent(key, new QueryReportData());
+                String title = setTitleCard(profileManager.getProfileInfoById(key.getProfileId()).getName(),
+                        profileManager.getTaskInfoById(key.getTaskId()).getName(),
+                        profileManager.getQueryInfoById(key.getQueryId()).getName());
 
-                QueryInfo queryInfo = profileManager.getQueryInfoById(key.getQueryId());
-                TableInfo tableInfo = profileManager.getTableInfoByTableName(queryInfo.getName());
-                List<CProfile> cProfileList = tableInfo.getCProfiles();
+                if (qValue) {
+                    viewCardMetricColumns(key);
+                    mapReportData.put(key, new QueryReportData());
 
-                TableCellEditor editor = (TableCellEditor) e.getSource();
-                int row = reportColumnCase.getJxTable().getSelectedRow();
-                Boolean cValue = (Boolean) editor.getCellEditorValue();
-
-                if (cValue) {
-                    CProfile cProfile = cProfileList
-                            .stream()
-                            .filter(f -> f.getColName().equals(reportColumnCase.getDefaultTableModel()
-                                    .getValueAt(reportColumnCase.getJxTable().getSelectedRow(), 2)))
-                            .findAny()
-                            .orElseThrow(() -> new NotFoundException("Not found metric by : "));
-
-                    CProfileReport cProfileReport = new CProfileReport();
-                    cProfileReport.setComment("");
-                    cProfileReport.setColId(cProfile.getColId());
-                    cProfileReport.setColIdSql(cProfile.getColIdSql());
-                    cProfileReport.setColName(cProfile.getColName());
-                    cProfileReport.setColDbTypeName(cProfile.getColDbTypeName());
-                    cProfileReport.setColSizeDisplay(cProfile.getColSizeDisplay());
-                    cProfileReport.setColSizeSqlType(cProfile.getColSizeSqlType());
-                    cProfileReport.setCsType(cProfile.getCsType());
-
-                    if (!mapReportData.get(key)
-                            .getCProfileReportList()
-                            .contains(cProfileReport)) {
-                        mapReportData.get(key)
-                                .getCProfileReportList()
-                                .add(cProfileReport);
-                    }
-
+                    reportTabsPane.getCollapseBtnDesign().setVisible(true);
+                    reportTabsPane.getClearBtnDesign().setEnabled(true);
+                    reportTabsPane.getJTabbedPaneChart().add(title, new JPanel());
                 } else {
-                    int colId = (int) reportColumnCase.getDefaultTableModel()
-                            .getValueAt(row, profileReportCase.getDefaultTableModel()
-                                    .findColumn(MetricsColumnNames.ID.getColName()));
-
-                    mapReportData.get(key)
-                            .getCProfileReportList()
-                            .removeIf(c -> c.getColId() == colId);
-
-                    JXTaskPaneWithJXTableCase cardInfo = getCardComponent(key);
-                    JXTableCase cTable = cardInfo.getJtcColumn();
-                    for (int index = 0; index < cTable.getJxTable().getRowCount(); index++) {
-                        int columnId = (int) cTable.getDefaultTableModel()
-                                .getValueAt(index, cTable.getDefaultTableModel()
-                                        .findColumn(MetricsColumnNames.ID.getColName()));
-                        String columnName = String.valueOf(cTable.getDefaultTableModel()
-                                .getValueAt(index, 1));
-                        if (colId == columnId) {
-                            removeCard(key, columnName);
+                    if (isVisibleCard(key)) {
+                        containerCardDesign.remove(getCardComponent(key));
+                        int index = reportTabsPane.getJTabbedPaneChart().indexOfTab(title);
+                        reportTabsPane.getJTabbedPaneChart().remove(index);
+                        mapReportData.remove(key);
+                        if (mapReportData.isEmpty()) {
+                            reportTabsPane.getCollapseBtnDesign().setVisible(false);
+                            reportTabsPane.getClearBtnDesign().setEnabled(false);
                         }
                     }
                 }
-                viewCardInfo(key);
             }
 
             @Override
-            public void editingCanceled(ChangeEvent changeEvent) {
-            }
-        });
-
-        this.mEditor = new DefaultCellEditor(new JCheckBox());
-        this.reportMetricsCase.getJxTable().getColumnModel().getColumn(0).setCellEditor(mEditor);
-
-        mEditor.addCellEditorListener(new CellEditorListener() {
-            @Override
-            public void editingStopped(ChangeEvent e) {
-
-                ProfileTaskQueryKey key = getProfileTaskQueryKey();
-
-                mapReportData.putIfAbsent(key, new QueryReportData());
-
-                QueryInfo queryInfo = profileManager.getQueryInfoById(key.getQueryId());
-                List<Metric> metricList = queryInfo.getMetricList();
-
-                TableCellEditor editor = (TableCellEditor) e.getSource();
-                int row = reportMetricsCase.getJxTable().getSelectedRow();
-                Boolean mValue = (Boolean) editor.getCellEditorValue();
-
-                if (mValue) {
-                    Metric metric = metricList
-                            .stream().filter(f -> f.getName()
-                                    .equals(reportMetricsCase.getDefaultTableModel()
-                                            .getValueAt(reportMetricsCase.getJxTable().getSelectedRow(), 2)))
-                            .findAny()
-                            .orElseThrow(() -> new NotFoundException("Not found metric by : "));
-
-                    MetricReport metricReport = new MetricReport();
-                    metricReport.setId(metric.getId());
-                    metricReport.setName(metric.getName());
-                    metricReport.setIsDefault(metric.getIsDefault());
-                    metricReport.setXAxis(metric.getXAxis());
-                    metricReport.setYAxis(metric.getYAxis());
-                    metricReport.setGroup(metric.getGroup());
-                    metricReport.setMetricFunction(metric.getMetricFunction());
-                    metricReport.setChartType(metric.getChartType());
-                    metricReport.setColumnGanttList(metric.getColumnGanttList());
-                    metricReport.setComment("");
-
-                    if (!mapReportData.get(key)
-                            .getMetricReportList()
-                            .contains(metricReport)) {
-                        mapReportData.get(key)
-                                .getMetricReportList()
-                                .add(metricReport);
-                    }
-
-                } else {
-                    int metricId = (int) reportMetricsCase.getDefaultTableModel()
-                            .getValueAt(row, profileReportCase.getDefaultTableModel()
-                                    .findColumn(MetricsColumnNames.ID.getColName()));
-
-                    mapReportData.get(key)
-                            .getMetricReportList()
-                            .removeIf(c -> c.getId() == metricId);
-
-                    JXTaskPaneWithJXTableCase cardInfo = getCardComponent(key);
-                    JXTableCase mTable = cardInfo.getJtcMetric();
-                    for (int index = 0; index < mTable.getJxTable().getRowCount(); index++) {
-                        int mId = (int) mTable.getDefaultTableModel()
-                                .getValueAt(index, mTable.getDefaultTableModel()
-                                        .findColumn(MetricsColumnNames.ID.getColName()));
-                        String mName = (String) mTable.getDefaultTableModel()
-                                .getValueAt(index, mTable.getDefaultTableModel()
-                                        .findColumn(MetricsColumnNames.NAME.getColName()));
-                        if (metricId == mId) {
-                            removeCard(key, mName);
-                        }
-                    }
-                }
-                viewCardInfo(key);
-            }
-
-            @Override
-            public void editingCanceled(ChangeEvent changeEvent) {
+            public void editingCanceled(ChangeEvent e) {
 
             }
         });
@@ -310,112 +196,49 @@ public class DesignPanelHandler extends ChartReportHandler implements ActionList
                 .getValueAt(queryReportCase.getJxTable()
                         .getSelectedRow(), queryReportCase.getDefaultTableModel()
                         .findColumn(QueryColumnNames.ID.getColName()));
-        ProfileTaskQueryKey key = new ProfileTaskQueryKey(profileId, taskId, queryId);
-        return key;
+
+        return new ProfileTaskQueryKey(profileId, taskId, queryId);
     }
 
-    private void removeCard(ProfileTaskQueryKey key, String name) {
 
-        QueryInfo queryInfo = profileManager.getQueryInfoById(key.getQueryId());
-        ProfileInfo profileInfo = profileManager.getProfileInfoById(key.getProfileId());
-        TaskInfo taskInfo = profileManager.getTaskInfoById(key.getTaskId());
+    private void viewCardMetricColumns(ProfileTaskQueryKey key) {
 
-        String title = setTitleCard(profileInfo.getName(), taskInfo.getName(), queryInfo.getName());
+        QueryInfo query = profileManager.getQueryInfoById(key.getQueryId());
+        ProfileInfo profile = profileManager.getProfileInfoById(key.getProfileId());
+        TaskInfo task = profileManager.getTaskInfoById(key.getTaskId());
+        List<Metric> metricList = query.getMetricList();
+        TableInfo tableInfo = profileManager.getTableInfoByTableName(query.getName());
 
-        ArrayList<Component> list = new ArrayList<>(List.of(containerChartCardDesign.getComponents()));
-        for (Component card : list) {
-            if (card instanceof JXTaskPaneForChartCard) {
-                JXTaskPaneForChartCard cardInfo = (JXTaskPaneForChartCard) card;
-                String nameFromTitle = cardInfo.getTitle().substring(cardInfo.getTitle().indexOf(":") + 1).trim();
+        List<CProfile> cProfileList = tableInfo.getCProfiles();
 
-                if (name.equals(nameFromTitle)) {
-                    containerChartCardDesign.remove(card);
-                    containerChartCardDesign.revalidate();
-                    containerChartCardDesign.repaint();
-                }
+        JXTaskPaneWithJXTableCase cardMetricCol = getCardComponent(key);
+
+        cardMetricCol.setTitle(query.getName());
+        cardMetricCol.setToolTipText(setTitleCard(profile.getName(), task.getName(), ""));
+
+        cardMetricCol.getJtcMetric().getDefaultTableModel().getDataVector().removeAllElements();
+        cardMetricCol.getJtcMetric().getDefaultTableModel().fireTableDataChanged();
+
+        if (metricList.size() != 0) {
+            for (Metric m : metricList) {
+                cardMetricCol.getJtcMetric().getDefaultTableModel().addRow(new Object[]{m.getId(), false, m.getName()});
             }
         }
-    }
 
-    private void viewCardInfo(ProfileTaskQueryKey key) {
+        cardMetricCol.getJtcColumn().getDefaultTableModel().getDataVector().removeAllElements();
+        cardMetricCol.getJtcColumn().getDefaultTableModel().fireTableDataChanged();
 
-        if (isVisibleCard(key)) {
+        if (cProfileList != null) {
 
-            List<MetricReport> metricReportList = mapReportData.get(key).getMetricReportList();
-            List<CProfileReport> cProfileReportList = mapReportData.get(key).getCProfileReportList();
-
-            JXTaskPaneWithJXTableCase cardInfo = getCardComponent(key);
-            cardInfo.getJtcMetric().getDefaultTableModel().getDataVector().removeAllElements();
-            cardInfo.getJtcMetric().getDefaultTableModel().fireTableDataChanged();
-            if (metricReportList.size() != 0) {
-                for (MetricReport m : metricReportList) {
-                    cardInfo.getJtcMetric().getDefaultTableModel()
-                            .addRow(new Object[]{m.getId(), m.getName()});
-                }
-                cardInfo.getJtcMetric().getJScrollPane().setVisible(true);
-            } else {
-                cardInfo.getJtcMetric().getJScrollPane().setVisible(false);
-            }
-
-            cardInfo.getJtcColumn().getDefaultTableModel().getDataVector().removeAllElements();
-            cardInfo.getJtcColumn().getDefaultTableModel().fireTableDataChanged();
-            if (cProfileReportList.size() != 0) {
-                for (CProfileReport c : cProfileReportList) {
-                    cardInfo.getJtcColumn().getDefaultTableModel()
-                            .addRow(new Object[]{c.getColId(), c.getColName()});
-                }
-                cardInfo.getJtcColumn().getJScrollPane().setVisible(true);
-            } else {
-                cardInfo.getJtcColumn().getJScrollPane().setVisible(false);
-            }
-
-            if (mapReportData.get(key).getCProfileReportList().isEmpty()
-                    && mapReportData.get(key).getMetricReportList().isEmpty()) {
-                containerCardDesign.remove(cardInfo);
-                containerCardDesign.revalidate();
-                containerCardDesign.repaint();
-            }
-
-        } else {
-
-            QueryInfo queryInfo = profileManager.getQueryInfoById(key.getQueryId());
-            ProfileInfo profileInfo = profileManager.getProfileInfoById(key.getProfileId());
-            TaskInfo taskInfo = profileManager.getTaskInfoById(key.getTaskId());
-
-            List<MetricReport> metricReportList = mapReportData.get(key).getMetricReportList();
-            List<CProfileReport> cProfileReportList = mapReportData.get(key).getCProfileReportList();
-
-            JXTaskPaneWithJXTableCase cardInfo = new JXTaskPaneWithJXTableCase(key);
-            cardInfo.setTitle(queryInfo.getName());
-            cardInfo.setToolTipText(setTitleCard(profileInfo.getName(), taskInfo.getName(), ""));
-
-            if (metricReportList.size() != 0) {
-                for (MetricReport m : metricReportList) {
-                    cardInfo.getJtcMetric().getDefaultTableModel()
-                            .addRow(new Object[]{m.getId(), m.getName()});
-                }
-                cardInfo.getJtcMetric().getJScrollPane().setVisible(true);
-            } else {
-                cardInfo.getJtcMetric().getJScrollPane().setVisible(false);
-            }
-
-            if (cProfileReportList.size() != 0) {
-                for (CProfileReport c : cProfileReportList) {
-                    cardInfo.getJtcColumn().getDefaultTableModel()
-                            .addRow(new Object[]{c.getColId(), c.getColName()});
-                }
-                cardInfo.getJtcColumn().getJScrollPane().setVisible(true);
-            } else {
-                cardInfo.getJtcColumn().getJScrollPane().setVisible(false);
-            }
-
-            containerCardDesign.add(cardInfo);
+            cProfileList.stream()
+                    .filter(f -> !f.getCsType().isTimeStamp())
+                    .forEach(c -> cardMetricCol.getJtcColumn().getDefaultTableModel()
+                            .addRow(new Object[]{c.getColId(), false, c.getColName()}));
         }
+        containerCardDesign.add(cardMetricCol);
         containerCardDesign.revalidate();
         containerCardDesign.repaint();
-
     }
-
 
     private boolean isVisibleCard(ProfileTaskQueryKey key) {
         List<Component> components = Arrays.asList(containerCardDesign.getComponents());
@@ -432,209 +255,69 @@ public class DesignPanelHandler extends ChartReportHandler implements ActionList
                 .map(card -> (JXTaskPaneWithJXTableCase) card)
                 .filter(card -> key.equals(card.getKey()))
                 .findFirst()
-                .orElse(new JXTaskPaneWithJXTableCase(key));
+                .orElse(new JXTaskPaneWithJXTableCase(key, mapReportData, profileManager, reportTabsPane, reportHelper, containerCardDesign));
     }
 
     @Override
     public void actionPerformed(ActionEvent e) {
         if (e.getSource() == reportTabsPane.getShowBtnDesign()) {
 
-            containerChartCardDesign.removeAll();
-
-            viewButtons(true);
-
-            for (Map.Entry<ProfileTaskQueryKey, QueryReportData> entry : mapReportData.entrySet()) {
-
-                ProfileTaskQueryKey key = entry.getKey();
-
-                QueryInfo queryInfo = profileManager.getQueryInfoById(key.getQueryId());
-                ProfileInfo profileInfo = profileManager.getProfileInfoById(key.getProfileId());
-                TaskInfo taskInfo = profileManager.getTaskInfoById(key.getTaskId());
-
-                List<MetricReport> metricReportList = entry.getValue().getMetricReportList();
-                List<CProfileReport> cProfileReportList = entry.getValue().getCProfileReportList();
-
-                ChartInfo chartInfo = profileManager.getChartInfoById(queryInfo.getId());
-                if (Objects.isNull(chartInfo)) {
-                    throw new NotFoundException(String.format("Chart info with id=%s not found",
-                            queryInfo.getId()));
-                }
-
-                chartInfo.setRangeHistory(RangeChartHistory.CUSTOM);
-
-                Date beginDate = reportTabsPane.getDateTimePickerFrom().getDate();
-                Date endDate = reportTabsPane.getDateTimePickerTo().getDate();
-
-                LocalDateTime begin = beginDate.toInstant().atZone(ZoneId.systemDefault()).toLocalDateTime();
-                LocalDateTime end = endDate.toInstant().atZone(ZoneId.systemDefault()).toLocalDateTime();
-
-                if (!begin.isBefore(end)) {
-                    JOptionPane.showMessageDialog(null, "Begin value must be less the end one",
-                            "General Error", JOptionPane.ERROR_MESSAGE);
-                } else {
-
-                    if (metricReportList.size() == 0 && cProfileReportList.size() == 0) {
-                    } else {
-                        String title = setTitleCard(profileInfo.getName(), taskInfo.getName(), queryInfo.getName());
-                        JPanel jPanel = new JPanel(new BorderLayout());
-                        jPanel.add(new JLabel(title), BorderLayout.WEST);
-                        jPanel.setBorder(new EtchedBorder());
-                        containerChartCardDesign.add(jPanel);
-                        containerChartCardDesign.setToolTipText(setTitleCard(profileInfo.getName(), taskInfo.getName(), queryInfo.getName()));
-
-                        chartInfo.setCustomBegin(begin.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli());
-                        chartInfo.setCustomEnd(end.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli());
-                    }
-
-
-                    if (metricReportList.size() != 0) {
-                        for (MetricReport m : metricReportList) {
-                            JXTaskPaneForChartCard cardChart = new JXTaskPaneForChartCard(key);
-                            cardChart.setTitle("Metric: " + m.getName());
-                            cardChart.setToolTipText("Metric: " + m.getName());
-                            cardChart.getJtaDescription().setText(m.getComment());
-
-                            cardChart.getJtaDescription().addFocusListener(new FocusListener() {
-                                @Override
-                                public void focusLost(FocusEvent focusEvent) {
-                                    m.setComment(cardChart.getJtaDescription().getText());
-                                }
-
-                                @Override
-                                public void focusGained(FocusEvent focusEvent) {
-                                }
-                            });
-
-                            this.loadChart(m.getId(), chartInfo, key, cardChart, SourceConfig.METRICS);
-                            containerChartCardDesign.add(cardChart);
-                            containerChartCardDesign.repaint();
-                            containerChartCardDesign.revalidate();
-                        }
-                        containerChartCardDesign.setBorder(new EtchedBorder());
-                    }
-                    if (cProfileReportList.size() != 0) {
-                        for (CProfileReport c : cProfileReportList) {
-                            JXTaskPaneForChartCard cardChart = new JXTaskPaneForChartCard(key);
-                            cardChart.setTitle("Column: " + c.getColName());
-                            cardChart.setToolTipText("Column: " + c.getColName());
-                            cardChart.getJtaDescription().setText(c.getComment());
-
-                            cardChart.getJtaDescription().addFocusListener(new FocusListener() {
-                                @Override
-                                public void focusLost(FocusEvent focusEvent) {
-                                    c.setComment(cardChart.getJtaDescription().getText());
-                                }
-
-                                @Override
-                                public void focusGained(FocusEvent focusEvent) {
-                                }
-                            });
-
-                            this.loadChart(c.getColId(), chartInfo, key, cardChart, SourceConfig.COLUMNS);
-                            containerChartCardDesign.add(cardChart);
-                            containerChartCardDesign.repaint();
-                            containerChartCardDesign.revalidate();
-                        }
-                        reportTabsPane.getCollapseBtnDesign().setVisible(true);
-                        reportTabsPane.getCollapseBtnDesign().setText("Collapse all");
-                    }
-                }
+            List<String> titlesList = new ArrayList<>();
+            int tabCount = reportTabsPane.getJTabbedPaneChart().getTabCount();
+            for (int i = 0; i < tabCount; i++) {
+                String title = reportTabsPane.getJTabbedPaneChart().getTitleAt(i);
+                titlesList.add(title);
             }
-        }
-        if (e.getSource() == reportTabsPane.getCollapseBtnDesign()) {
-            ArrayList<Component> containerCards = new ArrayList<>(List.of(containerChartCardDesign.getComponents()));
 
-            boolean collapseAll = reportTabsPane.getCollapseBtnDesign().getText().equals("Collapse all");
-
-            containerCards.stream()
-                    .filter(c -> c instanceof JXTaskPaneForChartCard)
-                    .map(c -> (JXTaskPaneForChartCard) c)
-                    .forEach(cardChart -> cardChart.setCollapsed(collapseAll));
-
-            reportTabsPane.getCollapseBtnDesign().setText(collapseAll ? "Expand all" : "Collapse all");
-        }
-        if (e.getSource() == reportTabsPane.getClearBtnDesign()) {
-            int input = JOptionPane.showConfirmDialog(new JDialog(),// 0=yes, 1=no, 2=cancel
-                    "Do you want to clear the design panel ?");
-            if (input == 0) {
-                containerCardDesign.removeAll();
-                containerChartCardDesign.removeAll();
-                mapReportData.clear();
-                reportTabsPane.getCollapseBtnDesign().setVisible(false);
-                for (int row = 0; row < reportColumnCase.getJxTable().getRowCount(); row++) {
-                    reportColumnCase.getJxTable().setValueAt(false, row, 0);
-                }
-                for (int row = 0; row < reportMetricsCase.getJxTable().getRowCount(); row++) {
-                    reportMetricsCase.getJxTable().setValueAt(false, row, 0);
-                }
-                viewButtons(false);
-            }
-        }
-        if (e.getSource() == reportTabsPane.getSaveBtnDesign()) {
-
-            Map<String, QueryReportData> mapKeyString = new HashMap<>();
-
-            mapReportData.entrySet()
-                    .forEach(f -> {
-                        {
-                            ChartInfo chartInfo = profileManager.getChartInfoById(f.getKey().getQueryId());
-                            mapKeyString
-                                    .put(f.getKey().getProfileId()
-                                                    + "_" + f.getKey().getTaskId()
-                                                    + "_" + f.getKey().getQueryId()
-                                                    + "_" + reportHelper.getDateFormatFused(chartInfo.getCustomBegin())
-                                                    + "_" + reportHelper.getDateFormatFused(chartInfo.getCustomEnd()),
-                                            f.getValue());
+            Component[] componentsList = containerChartCardDesign.getComponents();
+            if (componentsList != null) {
+                for (Component c : componentsList) {
+                    if (c instanceof JScrollPane) {
+                        JScrollPane scrollPane = (JScrollPane) c;
+                        JViewport viewport = scrollPane.getViewport();
+                        if (viewport != null) {
+                            Component[] components = viewport.getComponents();
+                            for (Component component : components) {
+                                viewport.remove(component);
+                            }
+                            viewport.revalidate();
+                            viewport.repaint();
                         }
-                    });
-            LocalDateTime nowDateTime = LocalDateTime.now();
-            String formattedDateForDir = nowDateTime.format(reportHelper.getDateTimeFormatterFused());
+                    }
+                }
 
-            reportManager.addConfig(mapKeyString, formattedDateForDir);
-            reportPdfPath.setDirDesignName("design_" + formattedDateForDir);
+            }
 
-            updateReportSaveComboBox();
+            Date beginDate = reportTabsPane.getDateTimePickerFrom().getDate();
+            Date endDate = reportTabsPane.getDateTimePickerTo().getDate();
 
-            JOptionPane.showMessageDialog(null,
-                    "Design - " + nowDateTime.format(reportHelper.getDateTimeFormatter()) + " has been saved",
-                    "Information", JOptionPane.INFORMATION_MESSAGE);
-        }
-        if (e.getSource() == reportTabsPane.getOpenBtnDesign()) {
-            String folderName = "design_" + getFolderDate();
-            reportPdfPath.setDirDesignName(folderName);
+            LocalDateTime begin = beginDate.toInstant().atZone(ZoneId.systemDefault()).toLocalDateTime();
+            LocalDateTime end = endDate.toInstant().atZone(ZoneId.systemDefault()).toLocalDateTime();
 
-            Map<String, QueryReportData> mapDesign = reportManager.getConfig(folderName, "design");
-            if (!mapDesign.isEmpty()) {
-                containerCardDesign.removeAll();
-                containerChartCardDesign.removeAll();
+            if (!begin.isBefore(end)) {
+                JOptionPane.showMessageDialog(new JDialog(), "Begin value must be less the end one",
+                        "General Error", JOptionPane.ERROR_MESSAGE);
+            } else {
 
-                for (Map.Entry<String, QueryReportData> entry : mapDesign.entrySet()) {
-                    String[] stringKey = entry.getKey().split("_");
+                viewButtons(true);
 
-                    int profileId = Integer.parseInt(stringKey[0]);
-                    String profileName = profileManager.getProfileInfoById(profileId).getName();
-                    int taskId = Integer.parseInt(stringKey[1]);
-                    String taskName = profileManager.getTaskInfoById(taskId).getName();
-                    int queryId = Integer.parseInt(stringKey[2]);
-                    String queryName = profileManager.getQueryInfoById(queryId).getName();
-                    QueryInfo queryInfo = profileManager.getQueryInfoById(queryId);
+                reportTabsPane.getDesignSaveInfo().setText("This design has not been saved");
+                reportTabsPane.getDesignSaveInfo().setForeground(Color.RED);
+                savedRow = -1;
 
-                    String dateFrom = stringKey[3];
-                    LocalDateTime begin = LocalDateTime.parse(dateFrom, reportHelper.getDateTimeFormatterFused());
-                    Date dateBegin = Date.from(begin.atZone(ZoneId.systemDefault()).toInstant());
+                reportTabsPane.getDesignReportCase().getJxTable().clearSelection();
 
-                    String dateTo = stringKey[4];
-                    LocalDateTime end = LocalDateTime.parse(dateTo, reportHelper.getDateTimeFormatterFused());
-                    Date dateEnd = Date.from(end.atZone(ZoneId.systemDefault()).toInstant());
+                for (Map.Entry<ProfileTaskQueryKey, QueryReportData> entry : mapReportData.entrySet()) {
 
-                    ProfileTaskQueryKey key = new ProfileTaskQueryKey(profileId, taskId, queryId);
+                    ProfileTaskQueryKey key = entry.getKey();
 
-                    reportTabsPane.getCollapseBtnDesign().setVisible(true);
-                    reportTabsPane.getCollapseBtnDesign().setText("Collapse all");
+                    QueryInfo queryInfo = profileManager.getQueryInfoById(key.getQueryId());
+                    ProfileInfo profileInfo = profileManager.getProfileInfoById(key.getProfileId());
+                    TaskInfo taskInfo = profileManager.getTaskInfoById(key.getTaskId());
+                    TableInfo tableInfo = profileManager.getTableInfoByTableName(queryInfo.getName());
 
                     List<MetricReport> metricReportList = entry.getValue().getMetricReportList();
                     List<CProfileReport> cProfileReportList = entry.getValue().getCProfileReportList();
-                    mapReportData.put(key, new QueryReportData(cProfileReportList, metricReportList));
 
                     ChartInfo chartInfo = profileManager.getChartInfoById(queryInfo.getId());
                     if (Objects.isNull(chartInfo)) {
@@ -644,188 +327,440 @@ public class DesignPanelHandler extends ChartReportHandler implements ActionList
 
                     chartInfo.setRangeHistory(RangeChartHistory.CUSTOM);
 
-                    if (!begin.isBefore(end)) {
-                        JOptionPane.showMessageDialog(null, " Begin value must be less the end one",
-                                "General Error", JOptionPane.ERROR_MESSAGE);
-                    } else {
-                        reportTabsPane.getDateTimePickerFrom().setDate(dateBegin);
-                        reportTabsPane.getDateTimePickerTo().setDate(dateEnd);
+                    containerChartCardDesign = new JPanel(new GridLayout(metricReportList.size() + cProfileReportList.size(), 1, 5, 5));
 
-                        if (metricReportList.size() == 0 && cProfileReportList.size() == 0) {
-                        } else {
-                            String title = setTitleCard(profileName, taskName, queryName);
-                            JPanel jPanel = new JPanel(new BorderLayout());
-                            jPanel.add(new JLabel(title), BorderLayout.WEST);
-                            jPanel.setBorder(new EtchedBorder());
-                            containerChartCardDesign.add(jPanel);
-                            containerChartCardDesign.setToolTipText(setTitleCard(profileName, taskName, queryName));
+                    if (metricReportList.size() != 0 || cProfileReportList.size() != 0) {
+                        String title = setTitleCard(profileInfo.getName(), taskInfo.getName(), queryInfo.getName());
+                        int index = reportTabsPane.getJTabbedPaneChart().indexOfTab(title);
 
-                            chartInfo.setCustomBegin(begin.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli());
-                            chartInfo.setCustomEnd(end.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli());
+                        JScrollPane jScrollPane = new JScrollPane();
+                        GUIHelper.setScrolling(jScrollPane);
 
-
-                            if (metricReportList.size() != 0) {
-                                for (MetricReport m : metricReportList) {
-                                    JXTaskPaneForChartCard cardChart = new JXTaskPaneForChartCard(key);
-                                    cardChart.setTitle("Metric: " + m.getName());
-                                    cardChart.setToolTipText("Metric: " + m.getName());
-                                    cardChart.getJtaDescription().setText(m.getComment());
-
-                                    cardChart.getJtaDescription().addFocusListener(new FocusListener() {
-                                        @Override
-                                        public void focusLost(FocusEvent focusEvent) {
-                                            m.setComment(cardChart.getJtaDescription().getText());
-                                        }
-
-                                        @Override
-                                        public void focusGained(FocusEvent focusEvent) {
-                                        }
-                                    });
-
-                                    this.loadChart(m.getId(), chartInfo, key, cardChart, SourceConfig.METRICS);
-                                    containerChartCardDesign.add(cardChart);
-                                    containerChartCardDesign.repaint();
-                                    containerChartCardDesign.revalidate();
-                                }
-                                containerChartCardDesign.setBorder(new EtchedBorder());
-                            }
-                            if (cProfileReportList.size() != 0) {
-                                for (CProfileReport c : cProfileReportList) {
-                                    JXTaskPaneForChartCard cardChart = new JXTaskPaneForChartCard(key);
-                                    cardChart.setTitle("Column: " + c.getColName());
-                                    cardChart.setToolTipText("Column: " + c.getColName());
-                                    cardChart.getJtaDescription().setText(c.getComment());
-
-                                    cardChart.getJtaDescription().addFocusListener(new FocusListener() {
-                                        @Override
-                                        public void focusLost(FocusEvent focusEvent) {
-                                            c.setComment(cardChart.getJtaDescription().getText());
-                                        }
-
-                                        @Override
-                                        public void focusGained(FocusEvent focusEvent) {
-                                        }
-                                    });
-
-                                    this.loadChart(c.getColId(), chartInfo, key, cardChart, SourceConfig.COLUMNS);
-                                    containerChartCardDesign.add(cardChart);
-                                    containerChartCardDesign.repaint();
-                                    containerChartCardDesign.revalidate();
-                                }
-                            }
-                            reportTabsPane.getCollapseBtnDesign().setVisible(true);
-                            reportTabsPane.getCollapseBtnDesign().setText("Collapse all");
-                            reportTabsPane.getClearBtnDesign().setEnabled(true);
-                            reportTabsPane.getGenerateReportBtnDesign().setEnabled(true);
-
-                            queryReportCase.getJxTable().clearSelection();
-                            highlightRowsTables(key);
-                            viewCardInfo(key);
+                        Component tabComponent = reportTabsPane.getJTabbedPaneChart().getComponentAt(index);
+                        if (tabComponent instanceof JScrollPane container) {
+                            container.removeAll();
+                            container.revalidate();
+                            container.repaint();
                         }
+
+
+                        containerChartCardDesign.setToolTipText(setTitleCard(profileInfo.getName(), taskInfo.getName(), queryInfo.getName()));
+
+                        chartInfo.setCustomBegin(begin.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli());
+                        chartInfo.setCustomEnd(end.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli());
+
+                        if (metricReportList.size() != 0) {
+                            for (MetricReport m : metricReportList) {
+
+                                Metric metric = getMetricByMetricReport(m);
+
+                                JPanelForChartCard cardChart = new JPanelForChartCard(m.getId(), chartInfo, key,
+                                        SourceConfig.METRICS, metric, profileManager, eventListener, fStore, reportHelper, mapReportData);
+
+                                cardChart.getJtfYAxis().setText("<html><b>Metric: </b>" + m.getName() + "</html>");
+
+                                cardChart.getCount().setEnabled(false);
+                                cardChart.getSum().setEnabled(false);
+                                cardChart.getAverage().setEnabled(false);
+
+                                cardChart.getJtfYAxis().setText(m.getYAxis().getColName());
+                                cardChart.getJtfGroup().setText(m.getGroup().getColName());
+                                cardChart.getJtfChartType().setText(String.valueOf(m.getChartType()));
+                                cardChart.setBorder(new EtchedBorder());
+                                cardChart.setSelectedRadioButton(m.getMetricFunction());
+                                cardChart.getJtaDescription().setText(m.getComment());
+
+                                // m.setComment(reportHelper.getCommentTxt());
+
+                                cardChart.loadChart(m.getId(), chartInfo, key, cardChart, SourceConfig.METRICS);
+                                containerChartCardDesign.add(cardChart);
+                                containerChartCardDesign.repaint();
+                                containerChartCardDesign.revalidate();
+                            }
+
+                        }
+
+                        if (cProfileReportList.size() != 0) {
+                            for (CProfileReport c : cProfileReportList) {
+
+                                Metric metric = getMetricByCProfileReport(c, tableInfo);
+
+                                JPanelForChartCard cardChart = new JPanelForChartCard(c.getColId(), chartInfo, key,
+                                        SourceConfig.COLUMNS, metric, profileManager, eventListener, fStore, reportHelper, mapReportData);
+
+                                cardChart.getJtfYAxis().setText("<html><b>Column: </b>" + c.getColName() + "</html>");
+                                cardChart.getJtfYAxis().setText(c.getColName());
+                                cardChart.getJtfGroup().setText(c.getColName());
+                                cardChart.getJtfChartType().setText(" ");
+                                cardChart.getJtfChartType().setText(String.valueOf(metric.getChartType()));
+                                cardChart.setBorder(new EtchedBorder());
+                                cardChart.setSelectedRadioButton(metric.getMetricFunction());
+                                cardChart.getJtaDescription().setText(c.getComment());
+
+                                //  c.setComment(reportHelper.getCommentTxt());
+
+                                cardChart.loadChart(c.getColId(), chartInfo, key, cardChart, SourceConfig.COLUMNS);
+                                containerChartCardDesign.add(cardChart);
+                                containerChartCardDesign.repaint();
+                                containerChartCardDesign.revalidate();
+
+                            }
+                        }
+                        jScrollPane.setViewportView(containerChartCardDesign);
+                        reportTabsPane.getJTabbedPaneChart().setComponentAt(index, jScrollPane);
+                        reportTabsPane.getJTabbedPaneChart().setSelectedIndex(index);
                     }
+                }
+
+                for (int i = 0; i < tabCount; i++) {
+                    reportTabsPane.getJTabbedPaneChart().setTitleAt(i, " ");
+                    reportTabsPane.getJTabbedPaneChart().setTitleAt(i, titlesList.get(i));
+                }
+                reportTabsPane.repaint();
+                reportTabsPane.revalidate();
+            }
+        }
+        if (e.getSource() == reportTabsPane.getCollapseBtnDesign()) {
+            ArrayList<Component> containerCards = new ArrayList<>(List.of(containerCardDesign.getComponents()));
+
+            boolean collapseAll = reportTabsPane.getCollapseBtnDesign().getText().equals("Collapse all");
+
+            containerCards.stream()
+                    .filter(c -> c instanceof JXTaskPaneWithJXTableCase)
+                    .map(c -> (JXTaskPaneWithJXTableCase) c)
+                    .forEach(cardChart -> cardChart.setCollapsed(collapseAll));
+
+            reportTabsPane.getCollapseBtnDesign().setText(collapseAll ? "Expand all" : "Collapse all");
+        }
+
+        if (e.getSource() == reportTabsPane.getClearBtnDesign()) {
+            int input = JOptionPane.showConfirmDialog(new JDialog(),// 0=yes, 1=no, 2=cancel
+                    "Do you want to clear the design panel ?");
+            if (input == 0) {
+                reportTabsPane.getDesignSaveInfo().setText(" ");
+                reportTabsPane.getDesignSaveInfo().setForeground(Color.RED);
+                savedRow = -1;
+                reportTabsPane.getDesignReportCase().getJxTable().clearSelection();
+
+                containerCardDesign.removeAll();
+                reportTabsPane.getJTabbedPaneChart().removeAll();
+                mapReportData.clear();
+                reportTabsPane.getCollapseBtnDesign().setVisible(false);
+                for (int row = 0; row < queryReportCase.getJxTable().getRowCount(); row++) {
+                    queryReportCase.getJxTable().setValueAt(false, row, 0);
+                }
+                reportTabsPane.getDateTimePickerFrom().setDate(new Date());
+                reportTabsPane.getDateTimePickerTo().setDate(reportTabsPane.getDateTimePickerFrom().getDate());
+
+                reportTabsPane.getCollapseBtnDesign().setText("Collapse all");
+                viewButtons(false);
+                reportTabsPane.getDelBtnDesign().setEnabled(false);
+            }
+        }
+        if (e.getSource() == reportTabsPane.getSaveBtnDesign()) {
+            if (savedRow == -1) {
+                savedDesign();
+                reportHelper.setMadeChanges(false);
+                savedRow = 0;
+                reportTabsPane.getDesignReportCase().getJxTable().setRowSelectionInterval(0, 0);
+                reportTabsPane.getDelBtnDesign().setEnabled(true);
+            } else {
+                int input = JOptionPane.showOptionDialog(new JDialog(),
+                        "This design has already been saved, should overwrite it or save it as a new one?",
+                        "Information", JOptionPane.DEFAULT_OPTION, JOptionPane.QUESTION_MESSAGE, null, options, options[0]);
+                if (input == 0) {
+                    selectedRow = reportTabsPane.getDesignReportCase().getJxTable().getSelectedRow();
+                    savedRow = selectedRow;
+                    updatedDesign();
+                    reportHelper.setMadeChanges(false);
+                    reportTabsPane.getDesignReportCase().getJxTable().setRowSelectionInterval(selectedRow, selectedRow);
+                    reportTabsPane.getDelBtnDesign().setEnabled(true);
+                } else if (input == 1) {
+                    savedDesign();
+                    reportHelper.setMadeChanges(false);
+                    savedRow = 0;
+                    reportTabsPane.getDesignReportCase().getJxTable().setRowSelectionInterval(0, 0);
+                    reportTabsPane.getDelBtnDesign().setEnabled(true);
                 }
             }
         }
         if (e.getSource() == reportTabsPane.getGenerateReportBtnDesign()) {
 
-            String folderName = reportPdfPath.getDirDesignName();
-            String reportName = reportPdfPath.getReportPdfPath();
+            ListSelectionModel selectionModel = reportTabsPane.getDesignReportCase().getJxTable().getSelectionModel();
+            if (!selectionModel.isSelectionEmpty()) {
+                savedRow = reportTabsPane.getDesignReportCase().getJxTable().getSelectedRow();
+            }
 
             String folderPath = filesHelper.getTemplateDir();
             boolean isEmpty = isFolderEmpty(folderPath);
+            File folder = new File(folderPath);
+            File[] files = folder.listFiles();
+            boolean isTTFFile = false;
+            boolean isFTLFile = false;
 
             if (isEmpty) {
                 try {
                     loadFileToFolder("default.ftl", folderPath);
+                    loadFileToFolder("arialuni.ttf", folderPath);
+                } catch (IOException ex) {
+                    throw new RuntimeException(ex);
+                }
+            } else {
+                for (File file : files) {
+                    if (file.getName().endsWith(".ftl")) {
+                        isFTLFile = true;
+                    }
+                    if (file.getName().endsWith(".ttf")) {
+                        isTTFFile = true;
+                    }
+                }
+                try {
+                    if (!isFTLFile) {
+                        loadFileToFolder("default.ftl", folderPath);
+                    }
+                    if (!isTTFFile) {
+                        loadFileToFolder("arialuni.ttf", folderPath);
+                    }
                 } catch (IOException ex) {
                     throw new RuntimeException(ex);
                 }
             }
 
-            List<TemplateInfo> templateInfos = new ArrayList<>();
-            List<Component> containerCards = Arrays.asList(containerChartCardDesign.getComponents());
 
-            int profileId = 0;
-            int taskId = 0;
-            int queryId = 0;
-            String profileName = "";
-            String taskName = "";
-            String queryName = "";
-            String dateFrom = "";
-            String dateTo = "";
-
-            Map<String, QueryReportData> mapKeyString = new HashMap<>();
-
-            LocalDateTime dateTime;
-            String formattedDateForDir;
-            if (folderName.equals(" ")) {
-                dateTime = LocalDateTime.now();
-                formattedDateForDir = dateTime.format(reportHelper.getDateTimeFormatterFused());
-                folderName = "design_" + formattedDateForDir;
+            if (savedRow == -1) {
+                savedDesign();
+                reportHelper.setMadeChanges(false);
+                savedRow = 0;
+                reportTabsPane.getDesignReportCase().getJxTable().setRowSelectionInterval(0, 0);
+                createdReport();
+                reportTabsPane.getSavedReportCase().getJxTable().setRowSelectionInterval(0, 0);
             } else {
-                formattedDateForDir = reportPdfPath.getDateTimeFolder();
-                dateTime = LocalDateTime.parse(formattedDateForDir, reportHelper.getDateTimeFormatterFused());
-            }
+                int inputDesign = JOptionPane.showOptionDialog(new JDialog(),
+                        "This design has already been saved, should overwrite it or save it as a new one?",
+                        "Information", JOptionPane.DEFAULT_OPTION, JOptionPane.QUESTION_MESSAGE, null, options, options[0]);
+                if (inputDesign == 0) {
 
-            for (Component c : containerCards) {
-                Map<String, Object> dataReport = new HashMap<>();
-                if (c instanceof JXTaskPaneForChartCard) {
-                    JXTaskPaneForChartCard cardChart = (JXTaskPaneForChartCard) c;
+                    selectedRow = reportTabsPane.getDesignReportCase().getJxTable().getSelectedRow();
+                    savedRow = selectedRow;
+                    updatedDesign();
+                    reportHelper.setMadeChanges(false);
+                    createdReport();
 
-                    ProfileTaskQueryKey profileTaskQueryKey = cardChart.getKey();
-                    profileId = profileTaskQueryKey.getProfileId();
-                    profileName = profileManager.getProfileInfoById(profileId).getName();
-
-                    taskId = profileTaskQueryKey.getTaskId();
-                    taskName = profileManager.getTaskInfoById(profileId).getName();
-
-                    queryId = profileTaskQueryKey.getQueryId();
-                    queryName = profileManager.getQueryInfoById(profileId).getName();
-
-                    ChartInfo chartInfo = profileManager.getChartInfoById(queryId);
-
-                    dateFrom = reportHelper.getDateFormat(chartInfo.getCustomBegin());
-                    dateTo = reportHelper.getDateFormat(chartInfo.getCustomEnd());
-
-                    String fileName = cardChart.getTitle().trim().split(" ")[1].toLowerCase();
-                    String description = cardChart.getJtaDescription().getText();
-
-                    mapReportData.entrySet()
-                            .forEach(f -> {
-                                mapKeyString
-                                        .put(f.getKey().getProfileId()
-                                                        + "_" + f.getKey().getTaskId()
-                                                        + "_" + f.getKey().getQueryId()
-                                                        + "_" + reportHelper.getDateFormatFused(chartInfo.getCustomBegin())
-                                                        + "_" + reportHelper.getDateFormatFused(chartInfo.getCustomEnd()),
-                                                f.getValue());
-                            });
-
-                    if (cardChart.getJSplitPane().getTopComponent() instanceof StackChartReportPanel) {
-                        StackChartReportPanel chartPanel = (StackChartReportPanel) cardChart.getJSplitPane().getTopComponent();
-
-                        String designDir = filesHelper.getDesignDir() + filesHelper.getFileSeparator() + folderName
-                                + filesHelper.getFileSeparator() + "profileId_" + profileId
-                                + "_taskId_" + taskId
-                                + "_queryId_" + queryId;
-
-                        /**
-                         *     todo implement relative path
-                         *    String designDir2 = "profileId_" + profileId
-                         *                               + "_taskId_" + taskId
-                         *                                + "_queryId_" + queryId;
-                         */
-
-                        String filePath = designDir + filesHelper.getFileSeparator() + fileName + ".png";
-                        try {
-                            Files.createDirectories(Paths.get(designDir));
-                            ChartUtilities.saveChartAsPNG(new File(filePath), chartPanel.getJFreeChart(), 680, 200);
-                            String pathPNG = designDir + filesHelper.getFileSeparator() + fileName + ".png";
-                            templateInfos.add(new TemplateInfo(cardChart.getTitle(), description, pathPNG));
-                        } catch (IOException ex) {
-                            throw new RuntimeException(ex);
+                    String formattedDateForDir = reportPdfPath.getDateTimeFolder();
+                    LocalDateTime dateTime = LocalDateTime.parse(formattedDateForDir, reportHelper.getDateTimeFormatterFused());
+                    reportTabsPane.getDesignReportCase().getJxTable().setRowSelectionInterval(selectedRow, selectedRow);
+                    int rowCount = reportTabsPane.getSavedReportCase().getJxTable().getRowCount();
+                    for (int row = 0; row < rowCount; row++) {
+                        String value = (String) reportTabsPane.getSavedReportCase().getJxTable().getValueAt(row, 0);
+                        if (value.contains(dateTime.format(reportHelper.getDateTimeFormatter()))) {
+                            reportTabsPane.getSavedReportCase().getJxTable().setRowSelectionInterval(row, row);
                         }
                     }
+                    reportTabsPane.getDelBtnReport().setEnabled(true);
+
+                } else if (inputDesign == 1) {
+                    savedDesign();
+                    reportHelper.setMadeChanges(false);
+                    savedRow = 0;
+                    reportTabsPane.getDesignReportCase().getJxTable().setRowSelectionInterval(0, 0);
+                    createdReport();
+                    reportTabsPane.getSavedReportCase().getJxTable().setRowSelectionInterval(0, 0);
+                    reportTabsPane.getDelBtnReport().setEnabled(true);
+                }
+            }
+
+
+            if (reportTabsPane.isEnabledAt(1)) {
+                reportTabsPane.setSelectedTab(ReportTabbedPane.REPORT);
+                reportTabsPane.getSaveBtnPDFReport().setEnabled(true);
+            }
+        }
+
+        if (e.getSource() == reportTabsPane.getDelBtnDesign()) {
+
+            int selectedRow = reportTabsPane.getDesignReportCase().getJxTable().getSelectedRow();
+
+            if (selectedRow == -1) {
+                JOptionPane.showMessageDialog(null, "Not selected design. Please select and try again!",
+                        "General Error", JOptionPane.ERROR_MESSAGE);
+            } else {
+                JCheckBox checkbox = new JCheckBox("Delete together with the report.");
+                String message = "Do you want to delete configuration: " + reportTabsPane.getDesignReportCase().getDefaultTableModel()
+                        .getValueAt(selectedRow, 0) + "?";
+                Object[] params = {message, checkbox};
+                int input = JOptionPane.showConfirmDialog(new JDialog(),// 0=yes, 1=no, 2=cancel
+                        params, "Information", JOptionPane.YES_NO_OPTION);
+                boolean delWithReport = checkbox.isSelected();
+                if (input == 0) {
+
+                    String dirName = reportPdfPath.getDirDesignName();
+                    String folderPath = filesHelper.getDesignDir() + filesHelper.getFileSeparator() + dirName;
+
+                    savedRow = -1;
+                    reportTabsPane.getDesignReportCase().getDefaultTableModel().removeRow(selectedRow);
+                    reportTabsPane.getDesignReportCase().getJxTable().clearSelection();
+
+                    reportTabsPane.getDesignSaveInfo().setText(" ");
+
+                    containerCardDesign.removeAll();
+                    reportTabsPane.getJTabbedPaneChart().removeAll();
+                    mapReportData.clear();
+
+                    reportTabsPane.getCollapseBtnDesign().setVisible(false);
+
+                    for (int row = 0; row < queryReportCase.getJxTable().getRowCount(); row++) {
+                        queryReportCase.getJxTable().setValueAt(false, row, 0);
+                    }
+                    reportTabsPane.getDateTimePickerFrom().setDate(new Date());
+                    reportTabsPane.getDateTimePickerTo().setDate(reportTabsPane.getDateTimePickerFrom().getDate());
+
+                    reportTabsPane.getCollapseBtnDesign().setText("Collapse all");
+                    viewButtons(false);
+                    reportTabsPane.getDelBtnDesign().setEnabled(false);
+
+                    File folder = new File(folderPath);
+                    if (!delWithReport) {
+                        if (folder.isDirectory()) {
+                            File[] files = folder.listFiles();
+                            if (files != null) {
+                                for (File file : files) {
+                                    if (!file.getName().endsWith(".pdf")) {
+                                        if (!file.isDirectory()) {
+                                            file.delete();
+                                        } else {
+                                            deleteDirectory(file);
+                                            file.delete();
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        deleteDirectory(folder);
+                        folder.delete();
+                        int rowCount = reportTabsPane.getSavedReportCase().getJxTable().getRowCount();
+                        String formattedDateForDir = reportPdfPath.getDateTimeFolder();
+                        LocalDateTime dateTime = LocalDateTime.parse(formattedDateForDir, reportHelper.getDateTimeFormatterFused());
+                        int delRow = -1;
+                        int row = 0;
+                        while (delRow == -1 && row < rowCount) {
+                            String value = (String) reportTabsPane.getSavedReportCase().getJxTable().getValueAt(row, 0);
+                            if (value.contains(dateTime.format(reportHelper.getDateTimeFormatter()))) {
+                                delRow = row;
+                            }
+                            row++;
+                        }
+                        if (delRow != -1) {
+                            reportTabsPane.getSavedReportCase().getDefaultTableModel().removeRow(delRow);
+                            reportTabsPane.getSavedReportCase().getJxTable().clearSelection();
+                            reportTabsPane.getScrollPanePDF().getViewport().removeAll();
+                            reportTabsPane.getScrollPanePDF().getViewport().revalidate();
+
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private void deleteDirectory(File f) {
+        for (File file : f.listFiles()) {
+            if (file.isDirectory()) {
+                deleteDirectory(file);
+            }
+            file.delete();
+        }
+    }
+
+    private void createdReport() {
+
+        String folderName = reportPdfPath.getDirDesignName();
+        String formattedDateForDir = reportPdfPath.getDateTimeFolder();
+
+        int profileId;
+        int taskId;
+        int queryId;
+        String profileName = "";
+        String taskName = "";
+        String queryName = "";
+        String dateFrom = "";
+        String dateTo = "";
+
+        Map<String, Object> dataReport = new HashMap<>();
+        int pageCount = 0;
+        for (int tabIndex = 0; tabIndex < reportTabsPane.getJTabbedPaneChart().getTabCount(); tabIndex++) {
+            Component component = reportTabsPane.getJTabbedPaneChart().getComponentAt(tabIndex);
+            if (component instanceof JScrollPane scrollPane) {
+                Component viewComponent = scrollPane.getViewport().getView();
+                Container container = (Container) viewComponent;
+                Component[] cards = container.getComponents();
+                for (Component c : cards) {
+                    if (c instanceof JPanelForChartCard cardChart) {
+                        ProfileTaskQueryKey profileTaskQueryKey = cardChart.getKey();
+                        profileId = profileTaskQueryKey.getProfileId();
+                        profileName = profileManager.getProfileInfoById(profileId).getName();
+
+                        taskId = profileTaskQueryKey.getTaskId();
+                        taskName = profileManager.getTaskInfoById(taskId).getName();
+
+                        queryId = profileTaskQueryKey.getQueryId();
+                        queryName = profileManager.getQueryInfoById(queryId).getName();
+
+                        ChartInfo chartInfo = profileManager.getChartInfoById(queryId);
+
+                        dateFrom = reportHelper.getDateFormat(chartInfo.getCustomBegin());
+                        dateTo = reportHelper.getDateFormat(chartInfo.getCustomEnd());
+
+                        String fileName = cardChart.getMetric().getName().trim().replace(" ", "_").toLowerCase();
+                        String description = cardChart.getJtaDescription().getText();
+                        String nameFunction = "";
+                        for (AbstractButton button : Collections.list(cardChart.getButtonGroupFunction().getElements())) {
+                            if (button.isSelected()) {
+                                nameFunction = " FUNCTION: " + button.getText();
+                            }
+                        }
+
+                        if (cardChart.getJSplitPane().getTopComponent() instanceof StackChartReportPanel chartPanel) {
+                            String designDir = filesHelper.getDesignDir() + filesHelper.getFileSeparator() + folderName
+                                    + filesHelper.getFileSeparator() + "profileId_" + profileId
+                                    + "_taskId_" + taskId
+                                    + "_queryId_" + queryId;
+
+                            /**
+                             *     todo implement relative path
+                             *    String designDir2 = "profileId_" + profileId
+                             *                               + "_taskId_" + taskId
+                             *                                + "_queryId_" + queryId;
+                             */
+
+                            String filePath = designDir + filesHelper.getFileSeparator() + fileName + ".png";
+
+                            BufferedImage image = new BufferedImage(cardChart.getJSplitPane().getWidth(),
+                                    cardChart.getJSplitPane().getHeight(), BufferedImage.TYPE_INT_ARGB);
+                            Graphics2D g2d = image.createGraphics();
+                            cardChart.getJSplitPane().printAll(g2d);
+                            g2d.dispose();
+                            try {
+                                Files.createDirectories(Paths.get(designDir));
+                                File outputFile = new File(filePath);
+                                ImageIO.write(image, "png", outputFile);
+                                String pathPNG = designDir + filesHelper.getFileSeparator() + fileName + ".png";
+                                dataReport.put("profileName", profileName);
+                                dataReport.put("taskName", taskName);
+                                dataReport.put("queryName", queryName);
+                                dataReport.put("dateFrom", dateFrom);
+                                dataReport.put("dateTo", dateTo);
+                                dataReport.put("nameCard", cardChart.getJlTitle().getText().replace("html", "p"));
+                                dataReport.put("nameFunction", nameFunction);
+                                dataReport.put("description", description);
+                                dataReport.put("pathChart", pathPNG);
+
+                            } catch (IOException ex) {
+                                throw new RuntimeException(ex);
+                            }
+                        }
+                    }
+
                     try {
                         Configuration cfg = new Configuration(Configuration.VERSION_2_3_32);
                         String fileNameTemplate = "default.ftl";
@@ -833,21 +768,14 @@ public class DesignPanelHandler extends ChartReportHandler implements ActionList
                         cfg.setDirectoryForTemplateLoading(path.toFile());
                         cfg.setDefaultEncoding("UTF-8");
 
-                        dataReport.put("dateFrom", dateFrom);
-                        dataReport.put("dateTo", dateTo);
-                        dataReport.put("profileName", profileName);
-                        dataReport.put("taskName", taskName);
-                        dataReport.put("queryName", queryName);
-                        dataReport.put("templatesInfos", templateInfos);
-
                         StringWriter stringWriter = new StringWriter();
                         Template template = cfg.getTemplate(fileNameTemplate);
                         template.process(dataReport, stringWriter);
                         String html = stringWriter.toString();
 
                         String designDir = filesHelper.getDesignDir() + filesHelper.getFileSeparator() + folderName;
-                        String templatefileName = String.format("template_%s.html", formattedDateForDir);
-                        String filePath = designDir + filesHelper.getFileSeparator() + templatefileName;
+                        String templateFileName = String.format("template_%d_%d_%s.html", tabIndex, pageCount++, formattedDateForDir);
+                        String filePath = designDir + filesHelper.getFileSeparator() + templateFileName;
 
                         File file = new File(filePath);
                         FileWriter fw = new FileWriter(file);
@@ -855,59 +783,138 @@ public class DesignPanelHandler extends ChartReportHandler implements ActionList
                         bf.write(html);
                         bf.close();
 
-                        String reportfileName = String.format("report_%s.pdf", formattedDateForDir);
-                        String fileReportPath = designDir + filesHelper.getFileSeparator() + reportfileName;
-                        Document document = new Document();
-                        PdfWriter writer = PdfWriter.getInstance(document, new FileOutputStream(fileReportPath));
-                        document.open();
-                        XMLWorkerHelper.getInstance().parseXHtml(writer, document, new FileInputStream(filePath));
-                        document.close();
-
-                        viewFilePdf(fileReportPath);
-
-                    } catch (IOException | TemplateException | DocumentException ex) {
+                    } catch (Exception ex) {
                         throw new RuntimeException(ex);
                     }
                 }
             }
-
-            if (reportPdfPath.getDirDesignName().equals(" ")) {
-                reportPdfPath.setDirDesignName(folderName);
-                reportManager.addConfig(mapKeyString, formattedDateForDir);
-            } else {
-                String fileJson = folderName + filesHelper.getFileSeparator() + "design.json";
-                try {
-                    reportManager.deleteDesign(fileJson);
-                } catch (IOException ex) {
-                    throw new RuntimeException(ex);
-                }
-                reportManager.addConfig(mapKeyString, formattedDateForDir);
-            }
-            this.reportTabsPane.getSavedReportCase().getDefaultTableModel().getDataVector().removeAllElements();
-            this.reportTabsPane.getSavedReportCase().getDefaultTableModel().fireTableDataChanged();
-            this.reportTabsPane.getReportSaveComboBox().removeAllItems();
-            updateReportSaveComboBox();
-            updateSavedReportCase();
-
-            JOptionPane.showMessageDialog(null,
-                    "Design - " + dateTime.format(reportHelper.getDateTimeFormatter()) + " has been saved",
-                    "Information", JOptionPane.INFORMATION_MESSAGE);
-
-            if (reportTabsPane.isEnabledAt(1)) {
-                reportTabsPane.setSelectedTab(ReportTabbedPane.REPORT);
-                reportTabsPane.getSaveBtnPDFReport().setEnabled(true);
-            }
         }
+        String designDir = filesHelper.getDesignDir() + filesHelper.getFileSeparator() + folderName;
+        String reportFileName = String.format("report_%s.pdf", formattedDateForDir);
+        String fileReportPath = designDir + filesHelper.getFileSeparator() + reportFileName;
+
+        try {
+            String font = "arialuni.ttf";
+            String pathDir = filesHelper.getFilePathFont(font);
+
+            Document document = new Document(PageSize.A4);
+
+            PdfWriter writer = PdfWriter.getInstance(document, new FileOutputStream(fileReportPath));
+
+            document.open();
+
+            File folder = new File(filesHelper.getDesignDir() + filesHelper.getFileSeparator() + folderName);
+            if (folder.isDirectory()) {
+                File[] files = folder.listFiles();
+                if (files != null) {
+                    for (File htmlFile : files) {
+                        if (htmlFile.isFile() && htmlFile.getName().endsWith(".html")) {
+                            String filePathHtml = htmlFile.getAbsolutePath();
+                            String contentHtml = new String(Files.readAllBytes(Paths.get(filePathHtml)));
+
+                            InputStream inf = new ByteArrayInputStream(contentHtml.getBytes("UTF-8"));
+
+                            XMLWorkerFontProvider fontProvider = new XMLWorkerFontProvider(XMLWorkerFontProvider.DONTLOOKFORFONTS);
+                            fontProvider.register(pathDir);
+
+                            FontFactory.setFontImp(fontProvider);
+                            XMLWorkerHelper.getInstance().parseXHtml(writer, document, inf, null, null, fontProvider);
+                            document.newPage();
+                        }
+                    }
+                }
+            }
+            document.close();
+        } catch (Exception ex) {
+            throw new RuntimeException(ex);
+        }
+
+        try {
+            PdfViewer pdfViewer = new PdfViewer(new File(fileReportPath));
+            reportTabsPane.getScrollPanePDF().setViewportView(pdfViewer);
+        } catch (Exception ex) {
+            throw new RuntimeException(ex);
+        }
+
+        this.reportTabsPane.getSavedReportCase().getDefaultTableModel().getDataVector().removeAllElements();
+        this.reportTabsPane.getSavedReportCase().getDefaultTableModel().fireTableDataChanged();
+
+        updateSavedReportCase();
+
+    }
+
+    private void savedDesign() {
+        Map<String, QueryReportData> mapKeyString = createMapKeyString();
+
+        LocalDateTime nowDateTime = LocalDateTime.now();
+        String formattedDateForDir = nowDateTime.format(reportHelper.getDateTimeFormatterFused());
+
+        reportManager.addConfig(mapKeyString, formattedDateForDir);
+        reportPdfPath.setDirDesignName("design_" + formattedDateForDir);
+
+        updateDesignReportCase();
+
+        reportTabsPane.getDesignSaveInfo().setText("Saved design: Design- " + nowDateTime.format(reportHelper.getDateTimeFormatter()));
+        reportTabsPane.getDesignSaveInfo().setForeground(new Color(0x0F850F));
+
+        JOptionPane.showMessageDialog(new JDialog(),
+                "Design - " + nowDateTime.format(reportHelper.getDateTimeFormatter()) + " has been saved",
+                "Information", JOptionPane.INFORMATION_MESSAGE);
+
+        reportTabsPane.repaint();
+        reportTabsPane.revalidate();
+    }
+
+    private void updatedDesign() {
+        Map<String, QueryReportData> mapKeyString = createMapKeyString();
+
+        String dirName = reportPdfPath.getDirDesignName();
+        String fileJson = dirName + filesHelper.getFileSeparator() + "design.json";
+        LocalDateTime dateTime = LocalDateTime.parse(reportPdfPath.getDateTimeFolder(), reportHelper.getDateTimeFormatterFused());
+        String folderDate = dateTime.format(reportHelper.getDateTimeFormatter());
+
+        try {
+            reportManager.deleteDesign(fileJson);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+        reportManager.addConfig(mapKeyString, reportPdfPath.getDateTimeFolder());
+
+        JOptionPane.showMessageDialog(new JDialog(),
+                "Design - " + folderDate + " has been updated",
+                "Information", JOptionPane.INFORMATION_MESSAGE);
+
+        reportTabsPane.repaint();
+        reportTabsPane.revalidate();
+    }
+
+    private Map<String, QueryReportData> createMapKeyString() {
+        Map<String, QueryReportData> mapKeyString = new HashMap<>();
+
+        saveDescriptions();
+
+        mapReportData.forEach((key, value) -> {
+            {
+                ChartInfo chartInfo = profileManager.getChartInfoById(key.getQueryId());
+                mapKeyString
+                        .put(key.getProfileId()
+                                        + "_" + key.getTaskId()
+                                        + "_" + key.getQueryId()
+                                        + "_" + reportHelper.getDateFormatFused(chartInfo.getCustomBegin())
+                                        + "_" + reportHelper.getDateFormatFused(chartInfo.getCustomEnd()),
+                                value);
+            }
+        });
+        return mapKeyString;
     }
 
     private void updateSavedReportCase() {
         designReportDirs = new ArrayList<>();
-        String designName = "";
+
         File designFolder = new File(filesHelper.getDesignDir());
         if (designFolder.exists() && designFolder.isDirectory()) {
             File[] folders = designFolder.listFiles(File::isDirectory);
             for (File folder : folders) {
-
                 File[] files = folder.listFiles();
                 for (File file : files) {
                     if (file.isFile() && file.getName().toLowerCase().endsWith(".pdf")) {
@@ -935,38 +942,42 @@ public class DesignPanelHandler extends ChartReportHandler implements ActionList
         }
     }
 
-    private void updateReportSaveComboBox() {
+    private void updateDesignReportCase() {
         designSaveDirs = new ArrayList<>();
 
-        this.reportTabsPane.getReportSaveComboBox().removeAllItems();
         String designName = "";
         File designFolder = new File(filesHelper.getDesignDir());
         if (designFolder.exists() && designFolder.isDirectory()) {
             File[] folders = designFolder.listFiles(File::isDirectory);
             for (File folder : folders) {
-
                 File[] files = folder.listFiles();
-                for (File file : files) {
-                    if (file.isFile() && file.getName().toLowerCase().endsWith(".json")) {
-                        designSaveDirs.add(folder);
+                if (folder.listFiles().length != 0) {
+                    for (File file : files) {
+                        if (file.isFile() && file.getName().toLowerCase().endsWith(".json")) {
+                            designSaveDirs.add(folder);
+                        }
                     }
+                } else {
+                    folder.delete();
                 }
             }
 
             Collections.reverse(designSaveDirs);
 
+            this.reportTabsPane.getDesignReportCase().getDefaultTableModel().getDataVector().removeAllElements();
+            this.reportTabsPane.getDesignReportCase().getDefaultTableModel().fireTableDataChanged();
             if (designSaveDirs != null) {
                 for (File folder : designSaveDirs) {
                     if (folder.listFiles() != null && folder.listFiles().length != 0) {
                         String dateStr = folder.getName().substring(folder.getName().indexOf("_") + 1);
                         LocalDateTime dateTime = LocalDateTime.parse(dateStr, reportHelper.getDateTimeFormatterFused());
                         designName = "Design - " + dateTime.format(reportHelper.getDateTimeFormatter());
-                        this.reportTabsPane.getReportSaveComboBox().addItem(designName);
+                        this.reportTabsPane.getDesignReportCase().getDefaultTableModel()
+                                .addRow(new Object[]{designName});
                     }
                 }
             }
         }
-
     }
 
     private void viewButtons(boolean isEnabled) {
@@ -978,9 +989,9 @@ public class DesignPanelHandler extends ChartReportHandler implements ActionList
     private String setTitleCard(String profileName, String taskName, String queryName) {
         String title = "";
         if (!queryName.equals("")) {
-            title = "<html><b>Profile:</b> " + profileName + "<br>"
-                    + "  <b>Task:</b> " + taskName + "<br>"
-                    + "  <b>Query:</b> " + queryName + "</html>";
+            title = "<html><b>Profile:</b> " + profileName + " <br>"
+                    + "  <b>Task:</b> " + taskName + " <br>"
+                    + "  <b>Query:</b> " + queryName + " </html>";
         } else {
             title = "<html><b>Profile:</b> " + profileName + "<br>"
                     + "  <b>Task:</b> " + taskName + "</html>";
@@ -989,18 +1000,12 @@ public class DesignPanelHandler extends ChartReportHandler implements ActionList
         return title;
     }
 
-    private String getFolderDate() {
-        String designFolder = reportTabsPane.getReportSaveComboBox().getSelectedItem().toString();
-        String dateStr = designFolder.substring(designFolder.indexOf("-") + 1).trim();
-        LocalDateTime dateTime = LocalDateTime.parse(dateStr, reportHelper.getDateTimeFormatter());
-        String folderDate = dateTime.format(reportHelper.getDateTimeFormatterFused());
-        return folderDate;
-    }
-
     private void highlightRowsTables(ProfileTaskQueryKey profileTaskQueryKey) {
         int profileId = profileTaskQueryKey.getProfileId();
         int taskId = profileTaskQueryKey.getTaskId();
         int queryId = profileTaskQueryKey.getQueryId();
+
+        QueryReportData queryReportData = mapReportData.get(profileTaskQueryKey);
 
         int profileRow = 0;
         boolean flag = true;
@@ -1037,11 +1042,69 @@ public class DesignPanelHandler extends ChartReportHandler implements ActionList
                             .findColumn(QueryColumnNames.ID.getColName()));
             if (queryIdRow == queryId) {
                 queryReportCase.getJxTable().setRowSelectionInterval(queryRow, queryRow);
+                if (queryReportData.getMetricReportList().size() != 0 || queryReportData.getCProfileReportList().size() != 0) {
+                    queryReportCase.getJxTable().setValueAt(true, queryRow, 0);
+                    fillMetricColumnCard(profileTaskQueryKey);
+                }
                 flag = false;
             } else {
                 queryRow++;
             }
         }
+
+        containerChartCardDesign.repaint();
+        containerChartCardDesign.revalidate();
+    }
+
+    private void fillMetricColumnCard(ProfileTaskQueryKey profileTaskQueryKey) {
+        Component[] components = containerCardDesign.getComponents();
+
+        for (Component component : components) {
+            if (component instanceof JXTaskPaneWithJXTableCase cardInfo) {
+
+                int queryId = profileTaskQueryKey.getQueryId();
+                String queryName = profileManager.getQueryInfoById(queryId).getName();
+
+                if (cardInfo.getTitle().equals(queryName)) {
+                    List<MetricReport> metricReportList = mapReportData.get(profileTaskQueryKey).getMetricReportList();
+                    List<CProfileReport> cProfileReportList = mapReportData.get(profileTaskQueryKey).getCProfileReportList();
+
+                    if (metricReportList.size() != 0) {
+                        for (MetricReport m : metricReportList) {
+                            for (int row = 0; row < cardInfo.getJtcMetric().getJxTable().getRowCount(); row++) {
+                                int metricId = (int) cardInfo.getJtcMetric().getDefaultTableModel()
+                                        .getValueAt(row, cardInfo.getJtcMetric().getDefaultTableModel()
+                                                .findColumn(MetricsColumnNames.ID.getColName()));
+                                if (m.getId() == metricId) {
+                                    cardInfo.getJtcMetric().getJxTable().setValueAt(true, row, 0);
+                                }
+                            }
+                        }
+                    }
+
+                    if (cProfileReportList.size() != 0) {
+                        for (CProfileReport c : cProfileReportList) {
+                            for (int row = 0; row < cardInfo.getJtcColumn().getJxTable().getRowCount(); row++) {
+                                int columId = (int) cardInfo.getJtcColumn().getDefaultTableModel()
+                                        .getValueAt(row, cardInfo.getJtcMetric().getDefaultTableModel()
+                                                .findColumn(MetricsColumnNames.ID.getColName()));
+                                if (c.getColId() == columId) {
+                                    cardInfo.getJtcColumn().getJxTable().setValueAt(true, row, 0);
+                                }
+                            }
+                        }
+                    }
+
+                    if (mapReportData.get(profileTaskQueryKey).getCProfileReportList().isEmpty()
+                            && mapReportData.get(profileTaskQueryKey).getMetricReportList().isEmpty()) {
+                        containerCardDesign.remove(cardInfo);
+                        containerCardDesign.revalidate();
+                        containerCardDesign.repaint();
+                    }
+                }
+            }
+        }
+
     }
 
     public boolean isFolderEmpty(String folderPath) {
@@ -1055,41 +1118,313 @@ public class DesignPanelHandler extends ChartReportHandler implements ActionList
     }
 
     public void loadFileToFolder(String filename, String folderPath) throws IOException {
-        InputStream inputStream = DesignPanelHandler.class.getClassLoader()
-                .getResourceAsStream("ftl" + filesHelper.getFileSeparator() + filename);
-
-        if (inputStream != null) {
-            Path targetPath = Path.of(folderPath, filename);
-            Files.copy(inputStream, targetPath, StandardCopyOption.REPLACE_EXISTING);
-        }
-    }
-
-    public void viewFilePdf(String fileReportPath) {
-        JPanel jPanelPDF = new JPanel(new VerticalLayout());
+        String[] fileNameSplit = filename.split("\\.");
 
         try {
-            PDDocument document = PDDocument.load(new File(fileReportPath));
-            PDFRenderer renderer = new PDFRenderer(document);
-            for (int pageIndex = 0; pageIndex < document.getNumberOfPages(); pageIndex++) {
-                BufferedImage image = renderer.renderImageWithDPI(pageIndex, 150);
-                ImageIcon imageIcon = new ImageIcon(image);
+            if (filesHelper.isJar()) {
+                List<Path> pathList = Collections.emptyList();
+                if (CONFIG_FTL_DIR_NAME.equals(fileNameSplit[1])) {
+                    pathList = filesHelper.getFilePathDirectoryResourcesJar(CONFIG_FTL_DIR_NAME);
+                } else if (CONFIG_TTF_DIR_NAME.equals(fileNameSplit[1])) {
+                    pathList = filesHelper.getFilePathDirectoryResourcesJar(CONFIG_TTF_DIR_NAME);
+                }
 
-                JLabel labelImage = new JLabel();
-                labelImage.setIcon(imageIcon);
-                jPanelPDF.add(labelImage);
+                pathList.forEach(file -> {
+                    Path targetPath = Path.of(folderPath, filename);
+                    ClassLoader classLoader = getClass().getClassLoader();
+                    try (InputStream is = classLoader.getResourceAsStream(file.toString())) {
+                        if (is == null) {
+                            throw new IllegalArgumentException("Resource not found: " + file);
+                        }
+                        Files.copy(is, targetPath, StandardCopyOption.REPLACE_EXISTING);
+                    } catch (IOException e) {
+                        log.catching(e);
+                    }
+                });
+            } else {
+                List<Path> pathList =  Collections.emptyList();
+                if (CONFIG_FTL_DIR_NAME.equals(fileNameSplit[1])) {
+                    pathList = filesHelper.getFilePathDirectoryResourcesFromFS(CONFIG_FTL_DIR_NAME);
+                } else if (CONFIG_TTF_DIR_NAME.equals(fileNameSplit[1])) {
+                    pathList = filesHelper.getFilePathDirectoryResourcesFromFS(CONFIG_TTF_DIR_NAME);
+                }
 
-                JLabel emptyLabel = new JLabel(String.valueOf(pageIndex + 1));
-                emptyLabel.setSize(new Dimension(25, 25));
-
-                jPanelPDF.add(emptyLabel);
+                pathList.forEach(file -> {
+                    Path targetPath = Path.of(folderPath, filename);
+                    try {
+                        Files.copy(file, targetPath, StandardCopyOption.REPLACE_EXISTING);
+                    } catch (IOException e) {
+                        log.catching(e);
+                    }
+                });
             }
-            document.close();
-        } catch (Exception e) {
-            e.printStackTrace();
+        } catch (URISyntaxException | IOException e) {
+            throw new RuntimeException(e);
         }
-        reportTabsPane.getScrollPanePDF().setViewportView(jPanelPDF);
-        reportPdfPath.setReportPdfPath(fileReportPath);
     }
 
+
+    @Override
+    public void valueChanged(ListSelectionEvent e) {
+        ListSelectionModel listSelectionModel = (ListSelectionModel) e.getSource();
+
+        if (!e.getValueIsAdjusting()) {
+            if (listSelectionModel.isSelectionEmpty()) {
+                log.info("Clearing profile fields");
+            } else {
+
+                if (e.getSource() == reportTabsPane.getDesignReportCase().getJxTable().getSelectionModel()
+                        && reportTabsPane.getDesignReportCase().getJxTable().getSelectedRow() != savedRow) {
+                    selectedRow = reportTabsPane.getDesignReportCase().getJxTable().getSelectedRow();
+
+                    if (!reportHelper.isMadeChanges()) {
+
+                        String designDir = GUIHelper.getNameByColumnName(reportTabsPane.getDesignReportCase().getJxTable(),
+                                reportTabsPane.getDesignReportCase().getDefaultTableModel(),
+                                listSelectionModel, "Design name");
+                        String dateStr = designDir.substring(designDir.indexOf("-") + 1).trim();
+                        LocalDateTime dateTime = LocalDateTime.parse(dateStr, reportHelper.getDateTimeFormatter());
+                        String folderDate = dateTime.format(reportHelper.getDateTimeFormatterFused());
+                        String folderName = "design_" + folderDate;
+
+                        reportPdfPath.setDirDesignName(folderName);
+                        reportTabsPane.getDesignSaveInfo().setText("Saved design: " + designDir);
+                        reportTabsPane.getDesignSaveInfo().setForeground(new Color(0x0A8D0A));
+                        savedRow = reportTabsPane.getDesignReportCase().getJxTable().getSelectedRow();
+
+                        Map<String, QueryReportData> mapDesign = reportManager.getConfig(folderName, "design");
+                        if (!mapDesign.isEmpty()) {
+                            containerCardDesign.removeAll();
+                            reportTabsPane.getJTabbedPaneChart().removeAll();
+
+                            for (Map.Entry<String, QueryReportData> entry : mapDesign.entrySet()) {
+                                String[] stringKey = entry.getKey().split("_");
+
+                                int profileId = Integer.parseInt(stringKey[0]);
+                                String profileName = profileManager.getProfileInfoById(profileId).getName();
+                                int taskId = Integer.parseInt(stringKey[1]);
+                                String taskName = profileManager.getTaskInfoById(taskId).getName();
+                                int queryId = Integer.parseInt(stringKey[2]);
+                                String queryName = profileManager.getQueryInfoById(queryId).getName();
+                                QueryInfo queryInfo = profileManager.getQueryInfoById(queryId);
+
+                                String dateFrom = stringKey[3];
+                                LocalDateTime begin = LocalDateTime.parse(dateFrom, reportHelper.getDateTimeFormatterFused());
+                                Date dateBegin = Date.from(begin.atZone(ZoneId.systemDefault()).toInstant());
+
+                                String dateTo = stringKey[4];
+                                LocalDateTime end = LocalDateTime.parse(dateTo, reportHelper.getDateTimeFormatterFused());
+                                Date dateEnd = Date.from(end.atZone(ZoneId.systemDefault()).toInstant());
+
+                                ProfileTaskQueryKey key = new ProfileTaskQueryKey(profileId, taskId, queryId);
+
+                                List<MetricReport> metricReportList = entry.getValue().getMetricReportList();
+                                List<CProfileReport> cProfileReportList = entry.getValue().getCProfileReportList();
+                                mapReportData.put(key, new QueryReportData(cProfileReportList, metricReportList));
+
+                                ChartInfo chartInfo = profileManager.getChartInfoById(queryInfo.getId());
+                                if (Objects.isNull(chartInfo)) {
+                                    throw new NotFoundException(String.format("Chart info with id=%s not found",
+                                            queryInfo.getId()));
+                                }
+
+                                chartInfo.setRangeHistory(RangeChartHistory.CUSTOM);
+
+                                reportTabsPane.getDateTimePickerFrom().setDate(dateBegin);
+                                reportTabsPane.getDateTimePickerTo().setDate(dateEnd);
+
+                                JPanel containerChartCardDesign = new JPanel(new GridLayout(metricReportList.size() + cProfileReportList.size(), 1, 5, 5));
+                                if (metricReportList.size() != 0 || cProfileReportList.size() != 0) {
+                                    String title = setTitleCard(profileName, taskName, queryName);
+
+                                    JScrollPane jScrollPane = new JScrollPane();
+                                    GUIHelper.setScrolling(jScrollPane);
+
+                                    reportTabsPane.getJTabbedPaneChart().add(title, jScrollPane);
+                                    int index = reportTabsPane.getJTabbedPaneChart().indexOfTab(title);
+                                    reportTabsPane.getJTabbedPaneChart().setSelectedIndex(index);
+
+                                    containerChartCardDesign.setToolTipText(setTitleCard(profileName, taskName, queryName));
+                                    jScrollPane.setViewportView(containerChartCardDesign);
+
+                                    chartInfo.setCustomBegin(begin.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli());
+                                    chartInfo.setCustomEnd(end.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli());
+
+                                    if (metricReportList.size() != 0) {
+                                        for (MetricReport m : metricReportList) {
+
+                                            Metric metric = getMetricByMetricReport(m);
+
+                                            JPanelForChartCard cardChart =
+                                                    new JPanelForChartCard(m.getId(), chartInfo, key, SourceConfig.METRICS,
+                                                            metric, profileManager, eventListener, fStore, reportHelper, mapReportData);
+
+                                            cardChart.getJtfYAxis().setText("<html><b>Metric: </b>" + m.getName() + "</html>");
+
+                                            cardChart.getCount().setEnabled(false);
+                                            cardChart.getSum().setEnabled(false);
+                                            cardChart.getAverage().setEnabled(false);
+
+                                            cardChart.getJtfYAxis().setText(m.getYAxis().getColName());
+                                            cardChart.getJtfGroup().setText(m.getGroup().getColName());
+                                            cardChart.getJtfChartType().setText(String.valueOf(m.getChartType()));
+
+                                            cardChart.setBorder(new EtchedBorder());
+                                            cardChart.setSelectedRadioButton(m.getMetricFunction());
+                                            cardChart.getJtaDescription().setText(m.getComment());
+
+                                            //m.setComment(reportHelper.getCommentTxt());
+
+                                            cardChart.loadChart(m.getId(), chartInfo, key, cardChart, SourceConfig.METRICS);
+                                            containerChartCardDesign.add(cardChart);
+                                            containerChartCardDesign.repaint();
+                                            containerChartCardDesign.revalidate();
+                                        }
+                                    }
+                                    if (cProfileReportList.size() != 0) {
+                                        for (CProfileReport c : cProfileReportList) {
+
+                                            TableInfo tableInfo = profileManager.getTableInfoByTableName(queryInfo.getName());
+
+                                            Metric metric = getMetricByCProfileReport(c, tableInfo);
+
+                                            JPanelForChartCard cardChart = new JPanelForChartCard(c.getColId(), chartInfo, key,
+                                                    SourceConfig.COLUMNS, metric, profileManager, eventListener, fStore, reportHelper, mapReportData);
+
+                                            cardChart.getJtfYAxis().setText("<html><b>Column: </b>" + c.getColName() + "</html>");
+                                            cardChart.getJtfYAxis().setText(c.getColName());
+                                            cardChart.getJtfGroup().setText(c.getColName());
+                                            cardChart.getJtfChartType().setText(" ");
+                                            cardChart.getJtfChartType().setText(String.valueOf(metric.getChartType()));
+                                            cardChart.setBorder(new EtchedBorder());
+                                            cardChart.setSelectedRadioButton(metric.getMetricFunction());
+                                            cardChart.getJtaDescription().setText(c.getComment());
+
+                                            //  c.setComment(reportHelper.getCommentTxt());
+
+                                            cardChart.loadChart(c.getColId(), chartInfo, key, cardChart, SourceConfig.COLUMNS);
+                                            containerChartCardDesign.add(cardChart);
+                                            containerChartCardDesign.repaint();
+                                            containerChartCardDesign.revalidate();
+                                        }
+                                    }
+                                    viewButtons(true);
+
+                                    reportTabsPane.getCollapseBtnDesign().setVisible(true);
+                                    viewCardMetricColumns(key);
+                                    queryReportCase.getJxTable().clearSelection();
+                                    highlightRowsTables(key);
+                                    reportPdfPath.setDirDesignName(folderName);
+
+                                }
+
+                            }
+                        }
+                    } else {
+                        int input = JOptionPane.showOptionDialog(new JDialog(),
+                                "Changes have been made to the current design , re - update it or cancel it?",
+                                "Information", JOptionPane.DEFAULT_OPTION, JOptionPane.QUESTION_MESSAGE, null, options, options[0]);
+                        reportTabsPane.getDesignReportCase().getJxTable().clearSelection();
+
+                        if (input == 0) {
+                            updatedDesign();
+                            savedRow = previousSelectedRow;
+                            reportHelper.setMadeChanges(false);
+                            reportTabsPane.getDesignReportCase().getJxTable().setRowSelectionInterval(previousSelectedRow, previousSelectedRow);
+                        } else if (input == 1) {
+                            savedDesign();
+                            savedRow = 0;
+                            reportHelper.setMadeChanges(false);
+                            reportTabsPane.getDesignReportCase().getJxTable().setRowSelectionInterval(0, 0);
+                        } else if (input == 2) {
+                            savedRow = selectedRow;
+                            reportHelper.setMadeChanges(false);
+                            reportTabsPane.getDesignReportCase().getJxTable().setRowSelectionInterval(previousSelectedRow, previousSelectedRow);
+                            containerChartCardDesign.repaint();
+                            containerChartCardDesign.revalidate();
+                        }
+                    }
+                }
+                previousSelectedRow = selectedRow;
+                reportTabsPane.getDelBtnDesign().setEnabled(true);
+            }
+        }
+    }
+
+    protected Metric getMetricByMetricReport(MetricReport mr) {
+        Metric metric = new Metric();
+        metric.setName(mr.getName());
+        metric.setXAxis(mr.getXAxis());
+        metric.setYAxis(mr.getYAxis());
+        metric.setGroup(mr.getGroup());
+        metric.setMetricFunction(mr.getMetricFunction());
+        metric.setChartType(mr.getChartType());
+
+        return metric;
+    }
+
+    protected Metric getMetricByCProfileReport(CProfileReport cProfile, TableInfo tableInfo) {
+        Metric metric = new Metric();
+        metric.setName(cProfile.getColName());
+        metric.setXAxis(tableInfo.getCProfiles().stream().filter(f -> f.getCsType().isTimeStamp()).findAny().orElseThrow());
+        metric.setYAxis(cProfile);
+        metric.setGroup(cProfile);
+
+        setMetricFunction(cProfile, metric);
+
+        return metric;
+    }
+
+    private void setMetricFunction(CProfileReport cProfile, Metric metric) {
+        if (CType.STRING.equals(cProfile.getCsType().getCType())) {
+            metric.setMetricFunction(MetricFunction.COUNT);
+            metric.setChartType(STACKED);
+        } else {
+            if (Arrays.stream(TimestampType.values()).anyMatch((t) -> t.name().equals(cProfile.getColDbTypeName()))) {
+                metric.setMetricFunction(MetricFunction.COUNT);
+                metric.setChartType(STACKED);
+            } else {
+                metric.setMetricFunction(MetricFunction.AVERAGE);
+                metric.setChartType(LINEAR);
+            }
+        }
+    }
+
+    private void saveDescriptions() {
+        for (int tabIndex = 0; tabIndex < reportTabsPane.getJTabbedPaneChart().getTabCount(); tabIndex++) {
+            Component component = reportTabsPane.getJTabbedPaneChart().getComponentAt(tabIndex);
+            if (component instanceof JScrollPane scrollPane) {
+                Component viewComponent = scrollPane.getViewport().getView();
+                Container container = (Container) viewComponent;
+                Component[] cards = container.getComponents();
+                for (Component card : cards) {
+                    if (card instanceof JPanelForChartCard cardChart) {
+                        ProfileTaskQueryKey profileTaskQueryKey = cardChart.getKey();
+                        QueryReportData value = mapReportData.get(profileTaskQueryKey);
+                        String nameMetricOrCol = cardChart.getJlTitle().getText().split("</b>")[1].replace("</html>", "");
+                        List<CProfileReport> cList = value.getCProfileReportList();
+                        List<MetricReport> mList = value.getMetricReportList();
+                        if (cardChart.getJlTitle().getText().contains("<b>Column: </b>")) {
+                            for (CProfileReport c : cList) {
+                                if (c.getColName().equalsIgnoreCase(nameMetricOrCol)) {
+                                    c.setComment(cardChart.getJtaDescription().getText());
+                                }
+                            }
+                        }
+                        if (cardChart.getJlTitle().getText().contains("<b>Metric: </b>")) {
+                            for (MetricReport m : mList) {
+                                if (m.getName().equalsIgnoreCase(nameMetricOrCol)) {
+                                    m.setComment(cardChart.getJtaDescription().getText());
+                                }
+                            }
+                        }
+                        mapReportData.putIfAbsent(profileTaskQueryKey, new QueryReportData(cList, mList));
+                    }
+                }
+            }
+        }
+
+    }
 }
+
 

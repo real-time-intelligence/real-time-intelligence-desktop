@@ -176,6 +176,7 @@ public class ProfileManagerImpl implements ProfileManager, JdbcLoader {
     table.setIndexType(tableInfo.getIndexType());
     table.setCompression(tableInfo.getCompression());
     table.setCProfiles(tableInfo.getCProfiles());
+    table.setValuableColumnList(tableInfo.getValuableColumnList());
 
     configurationManager.addConfig(table, Table.class);
     appCache.putTableInfo(tableInfo);
@@ -242,6 +243,7 @@ public class ProfileManagerImpl implements ProfileManager, JdbcLoader {
     table.setTableType(tableInfo.getTableType());
     table.setIndexType(tableInfo.getIndexType());
     table.setCProfiles(tableInfo.getCProfiles());
+    table.setValuableColumnList(tableInfo.getValuableColumnList());
 
     configurationManager.updateConfig(table, Table.class);
     appCache.putTableInfo(tableInfo);
@@ -410,6 +412,7 @@ public class ProfileManagerImpl implements ProfileManager, JdbcLoader {
           tableInfo.setIndexType(table.getIndexType());
           tableInfo.setCompression(table.getCompression());
           tableInfo.setCProfiles(table.getCProfiles());
+          tableInfo.setValuableColumnList(table.getValuableColumnList());
 
           this.appCache.putTableInfo(tableInfo);
         });

@@ -1,14 +1,13 @@
 package ru.rti.desktop.view.handler.report.report;
 
 import lombok.extern.log4j.Log4j2;
-import org.apache.pdfbox.pdmodel.PDDocument;
-import org.apache.pdfbox.rendering.PDFRenderer;
-import org.jdesktop.swingx.VerticalLayout;
 import ru.rti.desktop.helper.FilesHelper;
 import ru.rti.desktop.helper.GUIHelper;
 import ru.rti.desktop.helper.ReportHelper;
 import ru.rti.desktop.model.column.ProfileColumnNames;
+import ru.rti.desktop.model.column.ReportColumnNames;
 import ru.rti.desktop.view.panel.report.PathPdfInfo;
+import ru.rti.desktop.view.panel.report.PdfViewer;
 import ru.rti.desktop.view.panel.report.ReportTabsPane;
 
 import javax.inject.Inject;
@@ -18,9 +17,7 @@ import javax.swing.*;
 import javax.swing.event.ListSelectionEvent;
 import javax.swing.event.ListSelectionListener;
 import javax.swing.filechooser.FileNameExtensionFilter;
-import java.awt.*;
 import java.awt.event.*;
-import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -28,10 +25,11 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.time.LocalDateTime;
+import java.util.Date;
 
 @Log4j2
 @Singleton
-public class ReportPanelHandler  implements ActionListener, ListSelectionListener {
+public class ReportPanelHandler implements ActionListener, ListSelectionListener {
 
     private final ReportTabsPane reportTabsPane;
     private final JFileChooser saveFC;
@@ -39,6 +37,7 @@ public class ReportPanelHandler  implements ActionListener, ListSelectionListene
     private final PathPdfInfo reportPdfPath;
     private final FilesHelper filesHelper;
     private final ReportHelper reportHelper;
+    private PdfViewer pdfViewer;
 
 
     @Inject
@@ -56,8 +55,12 @@ public class ReportPanelHandler  implements ActionListener, ListSelectionListene
         this.saveFC = new JFileChooser();
         this.saveFC.setDialogTitle("Сохранить PDF файл");
         this.saveFC.setFileFilter(new FileNameExtensionFilter("PDF файлы", "pdf"));
+        this.saveFC.setSelectedFile(new File("report.pdf"));
+
+        this.pdfViewer = new PdfViewer();
 
         this.reportTabsPane.getSaveBtnPDFReport().addActionListener(this);
+        this.reportTabsPane.getDelBtnReport().addActionListener(this);
         this.reportTabsPane.getSavedReportCase().getJxTable().getSelectionModel().addListSelectionListener(this);
 
     }
@@ -84,35 +87,49 @@ public class ReportPanelHandler  implements ActionListener, ListSelectionListene
                 }
             }
         }
+        if (event.getSource() == reportTabsPane.getDelBtnReport()) {
 
-    }
+            int selectedRow = reportTabsPane.getSavedReportCase().getJxTable().getSelectedRow();
 
-    public void viewFilePdf(String fileName) {
-        JPanel jPanelPDF = new JPanel(new VerticalLayout());
+            if (selectedRow == -1) {
+                JOptionPane.showMessageDialog(null, "Not selected design. Please select and try again!",
+                        "General Error", JOptionPane.ERROR_MESSAGE);
+            } else {
+                String message = "Do you want to delete configuration: " + reportTabsPane.getSavedReportCase().getDefaultTableModel()
+                        .getValueAt(selectedRow, 0) + "?";
 
-        try {
-            PDDocument document = PDDocument.load(new File(fileName));
-            PDFRenderer renderer = new PDFRenderer(document);
-            for (int pageIndex = 0; pageIndex < document.getNumberOfPages(); pageIndex++) {
-                BufferedImage image = renderer.renderImageWithDPI(pageIndex, 150);
-                ImageIcon imageIcon = new ImageIcon(image);
+                int input = JOptionPane.showConfirmDialog(new JDialog(),
+                        message, "Information", JOptionPane.YES_NO_OPTION);
 
-                JLabel labelImage = new JLabel();
-                labelImage.setIcon(imageIcon);
-                jPanelPDF.add(labelImage);
+                if (input == 0) {
+                    String dirName = reportPdfPath.getDirDesignName();
+                    String folderPath = filesHelper.getDesignDir() + filesHelper.getFileSeparator() + dirName;
 
-                JLabel emptyLabel = new JLabel(String.valueOf(pageIndex + 1));
-                emptyLabel.setSize(new Dimension(25, 25));
+                    reportTabsPane.getSavedReportCase().getDefaultTableModel().removeRow(selectedRow);
+                    reportTabsPane.getSavedReportCase().getJxTable().clearSelection();
 
-                jPanelPDF.add(emptyLabel);
+                    reportTabsPane.getScrollPanePDF().getViewport().removeAll();
+                    reportTabsPane.getScrollPanePDF().getViewport().revalidate();
 
+                    reportTabsPane.getDelBtnReport().setEnabled(false);
+                    reportTabsPane.getSaveBtnPDFReport().setEnabled(false);
+
+                    File folder = new File(folderPath);
+                    if (folder.isDirectory()) {
+                        File[] files = folder.listFiles();
+                        if (files != null) {
+                            for (File file : files) {
+                                if (file.getName().endsWith(".pdf")) {
+                                    pdfViewer.closePdfFile();
+                                    file.delete();
+                                }
+                            }
+                        }
+                    }
+
+                }
             }
-            document.close();
-        } catch (Exception e) {
-            e.printStackTrace();
         }
-        reportTabsPane.getScrollPanePDF().setViewportView(jPanelPDF);
-        reportPdfPath.setReportPdfPath(fileName);
     }
 
     @Override
@@ -125,13 +142,15 @@ public class ReportPanelHandler  implements ActionListener, ListSelectionListene
             } else {
 
                 if (e.getSource() == reportTabsPane.getSavedReportCase().getJxTable().getSelectionModel()) {
-                    String designDir = GUIHelper.getNameByColumnName( reportTabsPane.getSavedReportCase().getJxTable(),
+
+                    String designDir = GUIHelper.getNameByColumnName(reportTabsPane.getSavedReportCase().getJxTable(),
                             reportTabsPane.getSavedReportCase().getDefaultTableModel(),
-                            listSelectionModel, ProfileColumnNames.NAME.getColName());
+                            listSelectionModel, ReportColumnNames.REPORT_NAME.getColName());
                     String dateStr = designDir.substring(designDir.indexOf("-") + 1).trim();
                     LocalDateTime dateTime = LocalDateTime.parse(dateStr, reportHelper.getDateTimeFormatter());
                     String folderDate = dateTime.format(reportHelper.getDateTimeFormatterFused());
-                    String folderName = "design_" +folderDate;
+                    String folderName = "design_" + folderDate;
+                    reportPdfPath.setDirDesignName(folderName);
 
                     File designFolder = new File(filesHelper.getDesignDir() + filesHelper.getFileSeparator() + folderName);
                     if (designFolder.exists() && designFolder.isDirectory()) {
@@ -140,15 +159,22 @@ public class ReportPanelHandler  implements ActionListener, ListSelectionListene
                             for (File file : files) {
 
                                 if (file.isFile() && file.getName().toLowerCase().endsWith(".pdf")) {
-                                    String fileRepoPath = filesHelper.getDesignDir()
+                                    String fileReportPath = filesHelper.getDesignDir()
                                             + filesHelper.getFileSeparator() + folderName
                                             + filesHelper.getFileSeparator() + file.getName();
-                                    viewFilePdf(fileRepoPath);
+
+                                    try {
+                                        pdfViewer = new PdfViewer(new File(fileReportPath));
+                                        reportTabsPane.getScrollPanePDF().setViewportView(pdfViewer);
+                                    } catch (Exception ex) {
+                                        throw new RuntimeException(ex);
+                                    }
                                     reportTabsPane.getSaveBtnPDFReport().setEnabled(true);
                                 }
                             }
                         }
                     }
+                    reportTabsPane.getDelBtnReport().setEnabled(true);
                 }
             }
         }

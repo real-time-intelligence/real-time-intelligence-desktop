@@ -8,6 +8,8 @@ import static ru.rti.desktop.model.view.ProcessType.HISTORY;
 import static ru.rti.desktop.model.view.ProcessType.REAL_TIME;
 
 import java.awt.Color;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
 import java.awt.event.MouseEvent;
 import java.util.Arrays;
 import java.util.Map;
@@ -17,7 +19,8 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import javax.inject.Inject;
 import javax.inject.Named;
-import javax.swing.JSplitPane;
+import javax.swing.*;
+
 import lombok.extern.log4j.Log4j2;
 import org.fbase.model.profile.CProfile;
 import org.fbase.model.profile.cstype.CType;
@@ -58,6 +61,7 @@ import ru.rti.desktop.view.chart.stacked.StackChartPanel;
 import ru.rti.desktop.view.detail.DetailPanel;
 import ru.rti.desktop.view.handler.MouseListenerImpl;
 import ru.rti.desktop.view.pane.ChartJTabbedPane;
+import ru.rti.desktop.view.structure.workspace.query.DetailsControlPanel;
 
 @Log4j2
 public abstract class ChartHandler extends MouseListenerImpl implements HelperChart {
@@ -87,6 +91,8 @@ public abstract class ChartHandler extends MouseListenerImpl implements HelperCh
 
   protected MetricFunction metricFunctionOnEdit = MetricFunction.NONE;
 
+  protected DetailsControlPanel detailsControlPanel;
+
   @Inject
   @Named("eventListener")
   EventListener eventListener;
@@ -104,6 +110,7 @@ public abstract class ChartHandler extends MouseListenerImpl implements HelperCh
                       ProfileTaskQueryKey profileTaskQueryKey,
                       JSplitPane chartGanttPanelRealTime,
                       JSplitPane chartGanttPanelHistory,
+                      DetailsControlPanel detailsControlPanel,
                       WorkspaceQueryComponent workspaceQueryComponent) {
     this.chartJTabbedPane = chartJTabbedPane;
     this.jxTableCaseMetrics = jxTableCaseMetrics;
@@ -114,6 +121,7 @@ public abstract class ChartHandler extends MouseListenerImpl implements HelperCh
     this.profileTaskQueryKey = profileTaskQueryKey;
     this.chartGanttPanelRealTime = chartGanttPanelRealTime;
     this.chartGanttPanelHistory = chartGanttPanelHistory;
+    this.detailsControlPanel = detailsControlPanel;
     this.workspaceQueryComponent = workspaceQueryComponent;
     this.executorService = Executors.newSingleThreadExecutor();
 
@@ -121,6 +129,10 @@ public abstract class ChartHandler extends MouseListenerImpl implements HelperCh
 
     this.colorBlack = Color.BLACK;
     this.colorBlue = (Color) bundleDefault.getObject("colorBlue");
+
+    this.detailsControlPanel.getCount().addActionListener(new RadioListenerColumn());
+    this.detailsControlPanel.getSum().addActionListener(new RadioListenerColumn());
+    this.detailsControlPanel.getAverage().addActionListener(new RadioListenerColumn());
 
     this.jxTableCaseMetrics.getJxTable().addMouseListener(this);
     this.jxTableCaseColumns.getJxTable().addMouseListener(this);
@@ -210,6 +222,8 @@ public abstract class ChartHandler extends MouseListenerImpl implements HelperCh
 
       try {
         Metric metric = getMetricByCProfile(cProfile);
+
+        setMetricFunctionAndChartOnEdit(metric);
 
         loadChartByMetric(metric, processType);
 
@@ -402,5 +416,19 @@ public abstract class ChartHandler extends MouseListenerImpl implements HelperCh
     }
   }
 
+  private class RadioListenerColumn implements ActionListener {
+
+    public RadioListenerColumn() {}
+
+    public void actionPerformed(ActionEvent e) {
+      JRadioButton button = (JRadioButton) e.getSource();
+
+      switch (button.getText()) {
+        case "Count" -> metricFunctionOnEdit = MetricFunction.COUNT;
+        case "Sum" -> metricFunctionOnEdit = MetricFunction.SUM;
+        case "Average" -> metricFunctionOnEdit = MetricFunction.AVERAGE;
+      }
+    }
+  }
 
 }

@@ -28,6 +28,7 @@ import ru.rti.desktop.model.view.ProcessType;
 import ru.rti.desktop.model.view.RangeChartHistory;
 import ru.rti.desktop.router.listener.AppCacheAddListener;
 import ru.rti.desktop.view.pane.ChartJTabbedPane;
+import ru.rti.desktop.view.structure.workspace.query.DetailsControlPanel;
 
 @Log4j2
 public class TimeRangeRecentHandler extends ChartHandler
@@ -52,9 +53,10 @@ public class TimeRangeRecentHandler extends ChartHandler
                                 ChartInfo chartInfo,
                                 QueryInfo queryInfo,
                                 TableInfo tableInfo,
+                                DetailsControlPanel detailsControlPanel,
                                 WorkspaceQueryComponent workspaceQueryComponent) {
     super(chartJTabbedPane, jxTableCaseMetrics, jxTableCaseColumns, tableInfo, queryInfo, chartInfo,
-        profileTaskQueryKey, chartGanttPanelRealTime, chartGanttPanelHistory, workspaceQueryComponent);
+        profileTaskQueryKey, chartGanttPanelRealTime, chartGanttPanelHistory, detailsControlPanel, workspaceQueryComponent);
 
     this.jxTableCaseRecent = jxTableCaseRecent;
     this.jxTableCaseRecent.getJxTable().getSelectionModel().addListSelectionListener(this);

@@ -5,8 +5,7 @@ import static ru.rti.desktop.model.view.TemplateAction.SAVE;
 
 import dagger.Module;
 import dagger.Provides;
-
-import java.awt.*;
+import java.awt.Dimension;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -14,9 +13,14 @@ import java.util.List;
 import java.util.Map;
 import javax.inject.Named;
 import javax.inject.Singleton;
-import javax.swing.*;
+import javax.swing.JButton;
+import javax.swing.JCheckBox;
+import javax.swing.JComboBox;
+import javax.swing.JScrollPane;
+import javax.swing.JTabbedPane;
+import javax.swing.JTextArea;
+import javax.swing.JTextField;
 import javax.swing.table.TableColumn;
-
 import org.fbase.model.profile.table.IType;
 import org.fbase.model.profile.table.TType;
 import org.jdesktop.swingx.JXTaskPaneContainer;
@@ -30,6 +34,7 @@ import ru.rti.desktop.model.column.MetadataColumnNames;
 import ru.rti.desktop.model.column.MetricsColumnNames;
 import ru.rti.desktop.model.column.ProfileColumnNames;
 import ru.rti.desktop.model.column.QueryColumnNames;
+import ru.rti.desktop.model.column.ReportColumnNames;
 import ru.rti.desktop.model.column.TaskColumnNames;
 import ru.rti.desktop.model.function.ChartType;
 import ru.rti.desktop.model.function.MetricFunction;
@@ -407,14 +412,14 @@ public class ConfigurationConfig {
     @Singleton
     @Named("configMetadataCase")
     public JXTableCase getProfileMetadataCase() {
-        JXTableCase jxTableCase = GUIHelper.getJXTableCaseMetadata(new String[]{MetadataColumnNames.COLUMN_ID.getColName(),
+        JXTableCase jxTableCase = GUIHelper.getJXTableCaseCheckBox(10, new String[]{MetadataColumnNames.COLUMN_ID.getColName(),
                 MetadataColumnNames.COLUMN_ID_SQL.getColName(), MetadataColumnNames.COLUMN.getColName(),
                 MetadataColumnNames.COLUMN_DB_TYPE_NAME.getColName(), MetadataColumnNames.STORAGE.getColName(),
-                MetadataColumnNames.COLUMN_TYPE.getColName()});
+                MetadataColumnNames.COLUMN_TYPE.getColName(), MetadataColumnNames.VALUABLE.getColName()}, 6);
         jxTableCase.getJxTable().getColumnExt(0).setVisible(false);
         jxTableCase.getJxTable().getColumnExt(0).setVisible(false);
-        return jxTableCase;
 
+        return jxTableCase;
     }
 
     @Provides
@@ -570,9 +575,8 @@ public class ConfigurationConfig {
     @Singleton
     @Named("profileReportCase")
     public JXTableCase getProfileReportCase() {
-        JXTableCase jxTableCase = GUIHelper.getJXTableCase(10,
+        JXTableCase jxTableCase = GUIHelper.getJXTableCase(7,
                 new String[]{ProfileColumnNames.ID.getColName(), ProfileColumnNames.NAME.getColName(),});
-        jxTableCase.getJxTable().getTableHeader().setVisible(false);
         return jxTableCase;
     }
 
@@ -580,9 +584,8 @@ public class ConfigurationConfig {
     @Singleton
     @Named("taskReportCase")
     public JXTableCase getTaskReportCase() {
-        JXTableCase jxTableCase = GUIHelper.getJXTableCase(10,
+        JXTableCase jxTableCase = GUIHelper.getJXTableCase(7,
                 new String[]{TaskColumnNames.ID.getColName(), TaskColumnNames.NAME.getColName(),});
-        jxTableCase.getJxTable().getTableHeader().setVisible(false);
         return jxTableCase;
     }
 
@@ -591,10 +594,22 @@ public class ConfigurationConfig {
     @Singleton
     @Named("queryReportCase")
     public JXTableCase getQueryReportCase() {
-        JXTableCase jxTableCase = GUIHelper.getJXTableCase(10,
-                new String[]{TaskColumnNames.ID.getColName(),
-                        TaskColumnNames.NAME.getColName(),});
-        jxTableCase.getJxTable().getTableHeader().setVisible(false);
+        return getReportQueryCase();
+    }
+
+    @NotNull
+    private JXTableCase getReportQueryCase() {
+        JXTableCase jxTableCase = GUIHelper.getJXTableCaseCheckBox(7,
+                new String[]{QueryColumnNames.ID.getColName(),
+                             QueryColumnNames.PICK.getColName(),
+                             QueryColumnNames.NAME.getColName()}, 1);
+
+        jxTableCase.getJxTable().getColumnExt(0).setVisible(false);
+
+        TableColumn col = jxTableCase.getJxTable().getColumnModel().getColumn(0);
+        col.setMinWidth(30);
+        col.setMaxWidth(35);
+
         return jxTableCase;
     }
 
@@ -613,52 +628,6 @@ public class ConfigurationConfig {
     public List<JCheckBox> getColumnsCheckBox() {
         List<JCheckBox> jCheckBoxList = new ArrayList<>();
         return jCheckBoxList;
-    }
-
-    @Provides
-    @Singleton
-    @Named("reportMetricsCase")
-    public JXTableCase getReportMetricsCase() {
-        return getReportCaseMetrics();
-    }
-
-    @NotNull
-    private JXTableCase getReportCaseMetrics() {
-        JXTableCase jxTableCase = GUIHelper.getJXTableCaseCheckBox(3,
-                new String[]{MetricsColumnNames.ID.getColName(),
-                        "Selected",
-                        MetricsColumnNames.NAME.getColName()}, 1);
-
-        jxTableCase.getJxTable().getColumnExt(0).setVisible(false);
-
-        TableColumn col = jxTableCase.getJxTable().getColumnModel().getColumn(0);
-        col.setMinWidth(30);
-        col.setMaxWidth(55);
-
-        return jxTableCase;
-    }
-
-    @Provides
-    @Singleton
-    @Named("reportColumnCase")
-    public JXTableCase getReportColumnCase() {
-        return getReportCaseCol();
-    }
-
-    @NotNull
-    private JXTableCase getReportCaseCol() {
-        JXTableCase jxTableCase = GUIHelper.getJXTableCaseCheckBox(3,
-                new String[]{MetricsColumnNames.ID.getColName(),
-                        "Selected",
-                        MetricsColumnNames.NAME.getColName()}, 1);
-
-        jxTableCase.getJxTable().getColumnExt(0).setVisible(false);
-
-        TableColumn col = jxTableCase.getJxTable().getColumnModel().getColumn(0);
-        col.setMinWidth(30);
-        col.setMaxWidth(55);
-
-        return jxTableCase;
     }
 
     @Provides
@@ -691,24 +660,6 @@ public class ConfigurationConfig {
         return container;
     }
 
-
-    @Provides
-    @Singleton
-    @Named("containerChartCardDesign")
-    public JXTaskPaneContainer getContainerChartCardDesign() {
-        JXTaskPaneContainer container = new JXTaskPaneContainer();
-        return container;
-    }
-
-
-    @Provides
-    @Singleton
-    @Named("metricAndColReport")
-    public JTabbedPane getMetricAndColReport() {
-        return new JTabbedPane();
-    }
-
-
     @Provides
     @Singleton
     @Named("reportSaveComboBox")
@@ -730,8 +681,8 @@ public class ConfigurationConfig {
     @Provides
     @Singleton
     @Named("reportPdfPath")
-    public PathPdfInfo getReportPdfPath(){
-        return new PathPdfInfo(" "," ");
+    public PathPdfInfo getReportPdfPathInfo() {
+        return new PathPdfInfo(" ");
     }
 
     @Provides
@@ -748,7 +699,17 @@ public class ConfigurationConfig {
     @Named("savedReportCase")
     public JXTableCase getSavedReportCase() {
         JXTableCase jxTableCase = GUIHelper.getJXTableCase(10,
-                new String[]{ ProfileColumnNames.NAME.getColName(),});
+                new String[]{ReportColumnNames.REPORT_NAME.getColName(),});
+
+        return jxTableCase;
+    }
+
+    @Provides
+    @Singleton
+    @Named("designReportCase")
+    public JXTableCase getDesignReportCase() {
+        JXTableCase jxTableCase = GUIHelper.getJXTableCase(7,
+                new String[]{"Design name",});
 
         return jxTableCase;
     }

@@ -7,7 +7,8 @@ public enum QueryColumnNames {
   GATHER("Gather"),
   MODE("Mode"),
   DESCRIPTION("Description"),
-  TEXT("Text");
+  TEXT("Text"),
+  PICK("Pick");
 
   private final String colName;
 
